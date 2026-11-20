@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BotDroid</string>
+    <string name="subtitle">A tiny Discord bot that runs on your phone</string>
+    <string name="token_label">BOT TOKEN</string>
+    <string name="token_hint">Paste your Discord bot token</string>
+    <string name="token_help">Get one at discord.com/developers → your app → Bot → Reset Token</string>
+    <string name="start">Start bot</string>
+    <string name="stop">Stop bot</string>
+    <string name="activity">ACTIVITY</string>
+    <string name="status_stopped">Stopped</string>
+</resources>
