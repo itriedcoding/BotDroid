@@ -84,7 +84,17 @@ public class BotService extends Service {
 
         running = true;
         currentStatus = "Starting…";
-        startForegroundCompat();
+        try {
+            startForegroundCompat();
+        } catch (Exception e) {
+            // Android 12+ can refuse a foreground service start from the
+            // background; fail with a message instead of crashing the app.
+            running = false;
+            LogBus.log("Could not start the background service: " + e.getMessage());
+            LogBus.setStatus("Stopped");
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         acquireWakeLock();
         LogBus.log("Starting bot");
 

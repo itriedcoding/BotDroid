@@ -50,6 +50,8 @@ final class Net {
         socket.connect(new InetSocketAddress(host, 443), timeoutMs);
         socket.setSoTimeout(Math.max(timeoutMs, 60000));
         SSLParameters params = socket.getSSLParameters();
+        // Verify the certificate actually belongs to the host we asked for.
+        params.setEndpointIdentificationAlgorithm("HTTPS");
         List<javax.net.ssl.SNIServerName> names = new ArrayList<>(1);
         names.add(new SNIHostName(host));
         params.setServerNames(names);

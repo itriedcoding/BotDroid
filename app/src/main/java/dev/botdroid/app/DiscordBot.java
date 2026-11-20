@@ -32,6 +32,7 @@ final class DiscordBot {
     private final Listener listener;
     private final DiscordRest rest;
     private final ExecutorService workers;
+    private final ExecutorService registrar;
 
     private volatile boolean running = true;
     private volatile boolean fatal = false;
@@ -55,6 +56,7 @@ final class DiscordBot {
             }
         };
         this.workers = Executors.newFixedThreadPool(2, factory);
+        this.registrar = Executors.newSingleThreadExecutor(factory);
     }
 
     void start() {
@@ -76,6 +78,7 @@ final class DiscordBot {
             current.close();
         }
         workers.shutdownNow();
+        registrar.shutdownNow();
     }
 
     private void log(String line) {
@@ -262,10 +265,12 @@ final class DiscordBot {
 
     private void registerCommands(final String guildId) {
         final String appId = applicationId;
-        if (guildId == null || appId == null || workers.isShutdown()) {
+        if (guildId == null || appId == null || registrar.isShutdown()) {
             return;
         }
-        workers.submit(new Runnable() {
+        // Registrations run on their own thread so a bot in many servers does
+        // not delay command responses with a backlog of REST calls.
+        registrar.submit(new Runnable() {
             @Override
             public void run() {
                 Net.Resp response = rest.put("/applications/" + appId + "/guilds/" + guildId + "/commands",

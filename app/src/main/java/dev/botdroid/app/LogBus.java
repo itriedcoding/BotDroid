@@ -51,7 +51,7 @@ final class LogBus {
     }
 
     static void log(String line) {
-        final String stamped = CLOCK.format(new Date()) + "  " + line;
+        final String stamped = time() + "  " + line;
         synchronized (LINES) {
             LINES.add(stamped);
             while (LINES.size() > MAX_LINES) {
@@ -66,6 +66,14 @@ final class LogBus {
                 }
             }
         });
+    }
+
+    private static String time() {
+        // SimpleDateFormat is not thread safe and log() is called from several
+        // bot threads at once.
+        synchronized (CLOCK) {
+            return CLOCK.format(new Date());
+        }
     }
 
     static void setStatus(final String value) {

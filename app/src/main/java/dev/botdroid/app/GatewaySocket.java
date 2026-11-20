@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -72,9 +73,31 @@ final class GatewaySocket {
         if (!statusLine.contains(" 101 ")) {
             throw new GatewayException("WebSocket handshake failed: " + statusLine, -1);
         }
-        if (!headers.toLowerCase().contains("sec-websocket-accept:")) {
-            throw new GatewayException("WebSocket handshake missing accept header", -1);
+        String accept = headerValue(headers, "sec-websocket-accept");
+        if (accept == null || !accept.equals(expectedAccept(key))) {
+            throw new GatewayException("WebSocket handshake accept mismatch", -1);
         }
+    }
+
+    private static String expectedAccept(String key) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-1");
+            byte[] hash = digest.digest((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+                    .getBytes(StandardCharsets.US_ASCII));
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (Exception e) {
+            return "-";
+        }
+    }
+
+    private static String headerValue(String headers, String name) {
+        for (String line : headers.split("\r\n")) {
+            int colon = line.indexOf(':');
+            if (colon > 0 && line.substring(0, colon).trim().equalsIgnoreCase(name)) {
+                return line.substring(colon + 1).trim();
+            }
+        }
+        return null;
     }
 
     private String readHeaders() throws IOException {
@@ -231,16 +254,18 @@ final class GatewaySocket {
         return data;
     }
 
-    void close() {
+    synchronized void close() {
         if (closed) {
             return;
         }
-        closed = true;
         try {
+            // Send the close frame before marking the socket closed, otherwise
+            // sendFrame refuses and Discord never sees a clean shutdown.
             sendFrame(OP_CLOSE, new byte[]{0x03, (byte) 0xE8});
         } catch (IOException ignored) {
             // best effort
         }
+        closed = true;
         try {
             if (socket != null) {
                 socket.close();
