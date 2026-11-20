@@ -2,14 +2,12 @@ package dev.botdroid.app;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.net.Uri;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
-import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -20,45 +18,28 @@ import java.util.Locale;
 public class SettingsActivity extends Activity {
 
     private Switch robloxSwitch;
+    private Switch autostartSwitch;
     private LinearLayout customList;
     private TextView customCount;
     private EditText customNameInput;
     private EditText customResponseInput;
     private TextView customBuilderStatus;
     private TextView refreshButton;
-    private Spinner presenceType;
-    private EditText presenceText;
-    private Spinner presenceStatus;
-    private TextView presencePreview;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
-
         Store.init(this);
 
         robloxSwitch = findViewById(R.id.roblox_switch);
+        autostartSwitch = findViewById(R.id.autostart_switch);
         customList = findViewById(R.id.custom_list);
         customCount = findViewById(R.id.custom_count);
         customNameInput = findViewById(R.id.custom_name_input);
         customResponseInput = findViewById(R.id.custom_response_input);
         customBuilderStatus = findViewById(R.id.custom_builder_status);
         refreshButton = findViewById(R.id.refresh_button);
-        presenceType = findViewById(R.id.presence_type);
-        presenceText = findViewById(R.id.presence_text);
-        presenceStatus = findViewById(R.id.presence_status);
-        presencePreview = findViewById(R.id.presence_preview);
-
-        ArrayAdapter<CharSequence> typeAdapter = ArrayAdapter.createFromResource(this,
-                R.array.presence_types, android.R.layout.simple_spinner_item);
-        typeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        presenceType.setAdapter(typeAdapter);
-
-        ArrayAdapter<CharSequence> statusAdapter = ArrayAdapter.createFromResource(this,
-                R.array.presence_statuses, android.R.layout.simple_spinner_item);
-        statusAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        presenceStatus.setAdapter(statusAdapter);
 
         robloxSwitch.setChecked(BotState.robloxEnabled);
         robloxSwitch.setOnCheckedChangeListener((button, checked) -> {
@@ -66,6 +47,17 @@ public class SettingsActivity extends Activity {
             Prefs.robloxEnabled(this, checked);
             LogBus.log("Roblox commands " + (checked ? "enabled" : "disabled"));
         });
+
+        autostartSwitch.setChecked(Prefs.autostart(this));
+        autostartSwitch.setOnCheckedChangeListener((button, checked) -> {
+            Prefs.autostart(this, checked);
+            LogBus.log("Start on boot " + (checked ? "enabled" : "disabled"));
+        });
+
+        findViewById(R.id.commands_button).setOnClickListener(view ->
+                startActivity(new Intent(this, CommandsActivity.class)));
+        findViewById(R.id.presence_button).setOnClickListener(view ->
+                startActivity(new Intent(this, PresenceActivity.class)));
 
         findViewById(R.id.add_custom_button).setOnClickListener(view -> addCustomCommand());
 
@@ -105,62 +97,19 @@ public class SettingsActivity extends Activity {
             }
         });
 
-        findViewById(R.id.save_presence).setOnClickListener(view -> savePresence());
-
         findViewById(R.id.back_button).setOnClickListener(view -> finish());
-
-        loadPresenceIntoUi();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         robloxSwitch.setChecked(BotState.robloxEnabled);
-        loadPresenceIntoUi();
+        autostartSwitch.setChecked(Prefs.autostart(this));
         refreshUi();
     }
 
-    private void loadPresenceIntoUi() {
-        presenceType.setSelection(indexOfType(BotPresence.type));
-        presenceStatus.setSelection(indexOfStatus(BotPresence.status));
-        presenceText.setText(BotPresence.text);
-        presencePreview.setText(BotPresence.describe());
-    }
-
-    private void savePresence() {
-        int position = presenceType.getSelectedItemPosition();
-        int statusPosition = presenceStatus.getSelectedItemPosition();
-        int type = BotPresence.TYPE_VALUES[Math.max(0, Math.min(position, BotPresence.TYPE_VALUES.length - 1))];
-        String status = BotPresence.STATUS_VALUES[Math.max(0,
-                Math.min(statusPosition, BotPresence.STATUS_VALUES.length - 1))];
-        BotPresence.set(type, presenceText.getText().toString(), status);
-        Prefs.savePresence(this, BotPresence.type, BotPresence.text, BotPresence.status);
-        BotService.applyPresence(this);
-        presencePreview.setText(BotPresence.describe());
-        LogBus.log("Bot status saved: " + BotPresence.describe());
-        toast(BotService.isRunning() ? "Status updated." : "Saved. The bot will use it when started.");
-    }
-
-    private static int indexOfType(int value) {
-        for (int i = 0; i < BotPresence.TYPE_VALUES.length; i++) {
-            if (BotPresence.TYPE_VALUES[i] == value) {
-                return i;
-            }
-        }
-        return 0;
-    }
-
-    private static int indexOfStatus(String value) {
-        for (int i = 0; i < BotPresence.STATUS_VALUES.length; i++) {
-            if (BotPresence.STATUS_VALUES[i].equals(value)) {
-                return i;
-            }
-        }
-        return 0;
-    }
-
     private void refreshUi() {
-        customCount.setText(getString(R.string.custom_count, CustomCommands.count()));
+        customCount.setText(getString(R.string.custom_count, CustomCommands.count(), CustomCommands.limit()));
         refreshCustomList();
         refreshButton.setEnabled(BotService.isRunning());
     }

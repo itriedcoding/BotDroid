@@ -31,6 +31,8 @@ public final class TestNew {
         roblox();
         presence();
         commandsPlus();
+        commandsExtra();
+        toggles();
         System.out.println();
         System.out.println("new: " + passed + " passed, " + failed + " failed");
         if (failed > 0) {
@@ -40,7 +42,7 @@ public final class TestNew {
 
     private static void definitions() throws Exception {
         JSONArray defs = Commands.definitions();
-        check("80 preset commands", defs.length() == 80, "count=" + defs.length());
+        check("100 preset commands", defs.length() == 100, "count=" + defs.length());
         StringBuilder problems = new StringBuilder();
         Set<String> names = new HashSet<>();
         for (int i = 0; i < defs.length(); i++) {
@@ -75,7 +77,7 @@ public final class TestNew {
         for (int i = 0; i < options.length(); i++) {
             JSONObject option = options.getJSONObject(i);
             int type = option.optInt("type", -1);
-            if (type != 1 && type != 3 && type != 4 && type != 6 && type != 7 && type != 8) {
+            if (type != 1 && type != 3 && type != 4 && type != 6 && type != 7 && type != 8 && type != 10) {
                 problems.append("type:").append(command).append(';');
             }
             if (option.optString("name", "").isEmpty()) {
@@ -354,6 +356,7 @@ public final class TestNew {
 
     private static void custom() throws Exception {
         CustomCommands.load("[]");
+        CommandToggles.loadDefaults();
         DiscordRest rest = new DiscordRest("t");
         Commands.handle(rest, customInteraction("add", "name", "hello", "response", "Hi {user}!"));
         check("custom added", CustomCommands.count() == 1, "count=" + CustomCommands.count());
@@ -380,13 +383,209 @@ public final class TestNew {
         check("custom validates names", CustomCommands.count() == 0, "invalid name accepted");
 
         CustomCommands.load("[]");
-        for (int i = 0; i < CustomCommands.MAX; i++) {
-            CustomCommands.add("cmd" + i, "x");
-        }
-        check("custom limit is 20", CustomCommands.MAX == 20, "max=" + CustomCommands.MAX);
-        check("custom rejects overflow", CustomCommands.add("overflow", "x") != null
-                && CustomCommands.count() == CustomCommands.MAX, "count=" + CustomCommands.count());
+        CommandToggles.load("[]");
+        check("all enabled leaves no custom room", CustomCommands.limit() == 0,
+                "limit=" + CustomCommands.limit());
+        check("custom refuses when slots are full", CustomCommands.add("nope", "x") != null,
+                "added anyway (count=" + CustomCommands.count() + ")");
         CustomCommands.load("[]");
+        CommandToggles.load("[]");
+    }
+
+    private static void toggles() throws Exception {
+        CustomCommands.load("[]");
+        CommandToggles.loadDefaults();
+        int defaultLimit = 100 - CommandToggles.enabledCount();
+        check("defaults leave room for custom commands", defaultLimit == CommandToggles.DEFAULT_OFF.size(),
+                "free=" + defaultLimit);
+        check("default-off commands are off", !CommandToggles.isEnabled("dm")
+                && CommandToggles.isEnabled("ban"), "unexpected defaults");
+        check("toggling works", CommandToggles.setEnabled("ping", false)
+                && !CommandToggles.isEnabled("ping"), "still enabled");
+        check("disabling frees another custom slot", CustomCommands.limit() == defaultLimit + 1,
+                "limit=" + CustomCommands.limit());
+        check("custom fits after disabling", CustomCommands.add("mine", "hello") == null,
+                "rejected");
+        JSONArray registered = Commands.definitions();
+        check("disabled command not registered", !names(registered).contains("ping"),
+                String.valueOf(registered.length()));
+        check("default-off command not registered", !names(registered).contains("dm"),
+                String.valueOf(registered.length()));
+        check("custom still registered", names(registered).contains("mine"),
+                String.valueOf(registered.length()));
+        check("registration never passes 100", registered.length() <= Commands.MAX_COMMANDS,
+                "count=" + registered.length());
+
+        DiscordRest rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("ping", "G", "C", 0));
+        check("disabled command refuses to run", contains(content(rest), "turned off"), content(rest));
+
+        CommandToggles.setEnabled("ping", true);
+        check("re-enabled command registers", names(Commands.definitions()).contains("ping"), "missing");
+        CommandToggles.load("[]");
+        CustomCommands.load("[]");
+    }
+
+    private static void commandsExtra() throws Exception {
+        DiscordRest rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("convert", "G", "C", 0, numberOption("value", 10),
+                stringOption("from", "km"), stringOption("to", "mi")));
+        check("convert km to mi", contains(content(rest), "6.2137"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("convert", "G", "C", 0, numberOption("value", 100),
+                stringOption("from", "c"), stringOption("to", "f")));
+        check("convert celsius", contains(content(rest), "212"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("morse", "G", "C", 0, stringOption("mode", "encode"),
+                stringOption("text", "SOS")));
+        check("morse encodes", contains(content(rest), "... --- ..."), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("morse", "G", "C", 0, stringOption("mode", "decode"),
+                stringOption("text", "... --- ...")));
+        check("morse decodes", contains(content(rest), "SOS"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("binary", "G", "C", 0, stringOption("mode", "encode"),
+                stringOption("text", "A")));
+        check("binary encodes", contains(content(rest), "01000001"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("binary", "G", "C", 0, stringOption("mode", "decode"),
+                stringOption("text", "01000001")));
+        check("binary decodes", contains(content(rest), "A"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("regex", "G", "C", 0, stringOption("pattern", "h(\\w+)o"),
+                stringOption("text", "hello")));
+        check("regex matches", contains(content(rest), "Match") && contains(content(rest), "ell"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("timezone", "G", "C", 0, stringOption("zone", "Europe/London")));
+        check("timezone resolves", contains(content(rest), "Europe/London"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("countdown", "G", "C", 0, stringOption("date", "2030-01-01")));
+        check("countdown builds timestamp", contains(content(rest), "<t:1893456000:F>"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("commandcount", "G", "C", 0));
+        check("commandcount shows slots", contains(embedDescription(rest), "of 100"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G/members/55".equals(p)
+                ? new Net.Resp(200, "{\"joined_at\":\"2024-01-02T03:04:05.000000+00:00\","
+                        + "\"user\":{\"id\":\"55\",\"username\":\"bob\"}}") : null;
+        Commands.handle(rest, interaction("joined", "G", "C", 0, userOption("user", "55", "bob")));
+        check("joined shows join date", contains(embedDescription(rest), "Joined server"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> {
+            if ("GET".equals(m) && "/guilds/G/members/55".equals(p)) {
+                return new Net.Resp(200, "{\"roles\":[\"77\"],\"user\":{\"id\":\"55\",\"username\":\"bob\"}}");
+            }
+            if ("GET".equals(m) && "/guilds/G/roles".equals(p)) {
+                return new Net.Resp(200, "[{\"id\":\"G\",\"name\":\"@everyone\",\"permissions\":\"0\"},"
+                        + "{\"id\":\"77\",\"name\":\"Admin\",\"permissions\":\"268435456\"}]");
+            }
+            return null;
+        };
+        Commands.handle(rest, interaction("memberroles", "G", "C", 0, userOption("user", "55", "bob")));
+        check("memberroles lists roles", contains(embedDescription(rest), "<@&77>"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> {
+            if ("GET".equals(m) && "/guilds/G/members/55".equals(p)) {
+                return new Net.Resp(200, "{\"roles\":[\"77\"],\"user\":{\"id\":\"55\",\"username\":\"bob\"}}");
+            }
+            if ("GET".equals(m) && "/guilds/G/roles".equals(p)) {
+                return new Net.Resp(200, "[{\"id\":\"G\",\"name\":\"@everyone\",\"permissions\":\"0\"},"
+                        + "{\"id\":\"77\",\"name\":\"Admin\",\"permissions\":\"268435456\"}]");
+            }
+            return null;
+        };
+        Commands.handle(rest, interaction("userperms", "G", "C", 0, userOption("user", "55", "bob")));
+        check("userperms adds role bits", contains(embedDescription(rest), "Manage Roles"),
+                embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "POST".equals(m) && "/channels/C/invites".equals(p)
+                ? new Net.Resp(200, "{\"code\":\"abc\"}") : null;
+        Commands.handle(rest, interaction("createinvite", "G", "C", Commands.CREATE_INVITE));
+        check("createinvite returns link", contains(content(rest), "discord.gg/abc"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G/invites".equals(p)
+                ? new Net.Resp(200, "[{\"code\":\"abc\",\"uses\":3,\"channel\":{\"name\":\"general\"},"
+                        + "\"inviter\":{\"username\":\"bob\"}}]") : null;
+        Commands.handle(rest, interaction("invites", "G", "C", Commands.MANAGE_GUILD));
+        check("invites lists codes", contains(embedDescription(rest), "abc"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/channels/C/webhooks".equals(p)
+                ? new Net.Resp(200, "[{\"id\":\"1\",\"name\":\"hooky\",\"type\":1}]") : null;
+        Commands.handle(rest, interaction("webhooks", "G", "C", Commands.MANAGE_WEBHOOKS));
+        check("webhooks lists hooks", contains(embedDescription(rest), "hooky"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/channels/C/threads/active".equals(p)
+                ? new Net.Resp(200, "{\"threads\":[{\"name\":\"topic\",\"message_count\":4}]}") : null;
+        Commands.handle(rest, interaction("threads", "G", "C", 0));
+        check("threads lists threads", contains(embedDescription(rest), "topic"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && p.startsWith("/guilds/G/scheduled-events")
+                ? new Net.Resp(200, "[{\"name\":\"Launch\",\"scheduled_start_time\":\"2030-01-01T00:00:00Z\","
+                        + "\"user_count\":5}]") : null;
+        Commands.handle(rest, interaction("events", "G", "C", 0));
+        check("events lists events", contains(embedDescription(rest), "Launch"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G/stickers".equals(p)
+                ? new Net.Resp(200, "[{\"name\":\"wave\",\"tags\":\"hi\"}]") : null;
+        Commands.handle(rest, interaction("stickers", "G", "C", 0));
+        check("stickers lists stickers", contains(embedDescription(rest), "wave"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G/emojis".equals(p)
+                ? new Net.Resp(200, "[{\"id\":\"123\",\"name\":\"party\"}]") : null;
+        Commands.handle(rest, interaction("emojiinfo", "G", "C", 0, stringOption("emoji", "<:party:123>")));
+        check("emojiinfo finds emoji", contains(embedTitle(rest), "party"), embedTitle(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "POST".equals(m) && "/channels/555/messages".equals(p)
+                ? new Net.Resp(200, "{\"id\":\"1\"}") : null;
+        Commands.handle(rest, interaction("announce", "G", "C", 8192, channelOption("channel", "555"),
+                stringOption("text", "Server news")));
+        check("announce posts", contains(content(rest), "Announced"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> {
+            if ("POST".equals(m) && "/users/@me/channels".equals(p)) {
+                return new Net.Resp(200, "{\"id\":\"DM9\"}");
+            }
+            if ("POST".equals(m) && "/channels/DM9/messages".equals(p)) {
+                return new Net.Resp(200, "{\"id\":\"2\"}");
+            }
+            return null;
+        };
+        Commands.handle(rest, interaction("dm", "G", "C", 0, userOption("user", "55", "bob"),
+                stringOption("text", "hi")));
+        check("dm sends", contains(content(rest), "Message sent"), content(rest));
+    }
+
+    private static JSONObject numberOption(String name, double value) throws Exception {
+        return new JSONObject().put("name", name).put("type", 10).put("value", value);
+    }
+
+    private static List<String> names(JSONArray definitions) throws Exception {
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < definitions.length(); i++) {
+            names.add(definitions.getJSONObject(i).optString("name", ""));
+        }
+        return names;
     }
 
     private static void roblox() throws Exception {
@@ -444,6 +643,25 @@ public final class TestNew {
         BotPresence.set(BotPresence.PLAYING, builder.toString(), "online");
         check("presence text clamped", BotPresence.text.length() == BotPresence.MAX_TEXT,
                 "len=" + BotPresence.text.length());
+
+        BotPresence.set(BotPresence.PLAYING, "with the API", "online", "in a server", "");
+        payload = BotPresence.gatewayPayload();
+        activity = payload.getJSONObject("d").getJSONArray("activities").getJSONObject(0);
+        check("presence state line", "in a server".equals(activity.optString("state")), activity.toString());
+
+        BotPresence.set(BotPresence.STREAMING, "live coding", "online", "", "");
+        check("streaming without url falls back", BotPresence.type == BotPresence.PLAYING,
+                "type=" + BotPresence.type);
+
+        BotPresence.set(BotPresence.STREAMING, "live coding", "online", "building",
+                "https://twitch.tv/botdroid");
+        payload = BotPresence.gatewayPayload();
+        activity = payload.getJSONObject("d").getJSONArray("activities").getJSONObject(0);
+        check("streaming type", activity.optInt("type") == 1, activity.toString());
+        check("streaming url", "https://twitch.tv/botdroid".equals(activity.optString("url")),
+                activity.toString());
+        check("presence describes streaming", BotPresence.describe().contains("Streaming"),
+                BotPresence.describe());
 
         BotPresence.set(BotPresence.PLAYING, "", "online");
     }

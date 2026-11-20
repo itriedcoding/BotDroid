@@ -61,7 +61,8 @@ final class CommandsCustom {
         for (String name : names) {
             builder.append("`/").append(name).append("`  ");
         }
-        builder.append("\n_").append(names.size()).append(" of ").append(CustomCommands.MAX).append(" used_");
+        builder.append("\n_").append(names.size()).append(" of ").append(CustomCommands.limit())
+                .append(" allowed · ").append(CommandToggles.enabledCount()).append(" built-ins on_");
         Commands.respond(rest, interaction, builder.toString(), true, null);
     }
 

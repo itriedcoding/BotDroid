@@ -18,8 +18,6 @@ final class CustomCommands {
         void save(String json);
     }
 
-    // Discord allows 100 guild commands per server; 80 built-ins leave room for 20.
-    static final int MAX = 20;
     static final int MAX_RESPONSE = 1500;
 
     private static final LinkedHashMap<String, String> COMMANDS = new LinkedHashMap<>();
@@ -52,7 +50,7 @@ final class CustomCommands {
                 }
                 String name = entry.optString("name", "");
                 String response = entry.optString("response", "");
-                if (isValidName(name) && !response.isEmpty() && COMMANDS.size() < MAX) {
+                if (isValidName(name) && !response.isEmpty() && COMMANDS.size() < 100) {
                     COMMANDS.put(name, response);
                 }
             }
@@ -122,8 +120,13 @@ final class CustomCommands {
             return "Responses are limited to " + MAX_RESPONSE + " characters.";
         }
         boolean existing = COMMANDS.containsKey(name);
-        if (!existing && COMMANDS.size() >= MAX) {
-            return "You already have the maximum of " + MAX + " custom commands.";
+        int limit = limit();
+        if (!existing && COMMANDS.size() >= limit) {
+            return limit == 0
+                    ? "All " + Commands.MAX_COMMANDS + " command slots are taken by built-in commands. "
+                    + "Turn some off in Settings → Commands to make room."
+                    : "You already have the maximum of " + limit + " custom commands for the "
+                    + CommandToggles.enabledCount() + " built-ins that are on.";
         }
         COMMANDS.put(name, response);
         persist();
@@ -154,6 +157,11 @@ final class CustomCommands {
         if (listener != null) {
             listener.run();
         }
+    }
+
+    /** How many custom commands fit alongside the built-ins that are enabled. */
+    static int limit() {
+        return Math.max(0, Commands.MAX_COMMANDS - CommandToggles.enabledCount());
     }
 
     static boolean isValidName(String name) {

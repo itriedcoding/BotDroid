@@ -14,11 +14,16 @@
     <string name="roblox_title">Roblox integration</string>
     <string name="roblox_desc">/roblox looks up Roblox users, avatars, games and groups using the public Roblox API.</string>
     <string name="custom_title">Custom commands</string>
-    <string name="custom_count">%1$d saved</string>
+    <string name="custom_count">%1$d saved · %2$d allowed with the built-ins you have on</string>
     <string name="clear_custom">Clear custom commands</string>
-    <string name="presence_title">Bot status</string>
-    <string name="presence_desc">Choose what Discord shows under the bot name, and whether it appears online, idle, do not disturb or invisible.</string>
-    <string name="presence_hint">Status text (max 128 characters)</string>
+    <string name="presence_title">Rich presence</string>
+    <string name="presence_desc">What Discord shows under the bot name: activity type, the main line, an optional second line, a stream URL for Streaming, and whether the bot appears online, idle, do not disturb or invisible.</string>
+    <string name="presence_hint">Activity line, e.g. with slash commands</string>
+    <string name="presence_state_hint">Second line (optional)</string>
+    <string name="presence_url_hint">Stream URL (required for Streaming)</string>
+    <string name="presence_note">Discord lets bots set only the activity name, state, type and URL, so images, buttons and party info are not offered here — the API would ignore them. Rich presence with artwork needs the Discord Social SDK, a native library for C++/Unity/Unreal, not a plain Java app.</string>
+    <string name="presence_card_desc">Activity type, two text lines, stream URL and online status.</string>
+    <string name="presence_open">Open rich presence</string>
     <string name="presence_save">Save status</string>
     <string name="bot_section">Bot</string>
     <string name="refresh_commands">Re-register commands in Discord</string>
@@ -32,4 +37,13 @@
     <string name="custom_add">Add command</string>
     <string name="custom_remove">Remove</string>
     <string name="custom_empty">None yet. Build one below, or use /custom add in Discord.</string>
+    <string name="commands_title">Commands</string>
+    <string name="commands_card_title">Commands</string>
+    <string name="commands_card_desc">Turn built-in commands on or off. Discord allows 100 commands per server, shared with your custom ones.</string>
+    <string name="commands_open">Manage commands</string>
+    <string name="commands_desc">Off commands are not registered in Discord and make room for custom commands.</string>
+    <string name="commands_all_on">Turn all on</string>
+    <string name="commands_all_off">Turn all off</string>
+    <string name="autostart_title">Start on boot</string>
+    <string name="autostart_desc">Bring the bot back automatically when the phone restarts. The phone still has to be on: an app cannot stay online with the device powered off.</string>
 </resources>

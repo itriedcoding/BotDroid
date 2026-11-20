@@ -2,6 +2,7 @@
 <resources>
     <string-array name="presence_types">
         <item>Playing</item>
+        <item>Streaming</item>
         <item>Listening to</item>
         <item>Watching</item>
         <item>Competing in</item>

@@ -328,6 +328,11 @@ final class DiscordBot {
                 if (appId == null) {
                     return;
                 }
+                int skipped = Commands.skippedPresetCount();
+                if (skipped > 0) {
+                    log("Discord allows " + Commands.MAX_COMMANDS + " commands per server: " + skipped
+                            + " built-in command(s) did not fit. Turn some off in Settings → Commands.");
+                }
                 String body = Commands.definitions().toString();
                 for (String guildId : knownGuilds) {
                     Net.Resp response = rest.put("/applications/" + appId + "/guilds/" + guildId + "/commands", body);

@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="false"
@@ -34,9 +35,29 @@
             android:label="@string/settings"
             android:parentActivityName=".MainActivity" />
 
+        <activity
+            android:name=".CommandsActivity"
+            android:exported="false"
+            android:label="@string/commands_title"
+            android:parentActivityName=".SettingsActivity" />
+
+        <activity
+            android:name=".PresenceActivity"
+            android:exported="false"
+            android:label="@string/presence_title"
+            android:parentActivityName=".SettingsActivity" />
+
         <service
             android:name=".BotService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

@@ -14,10 +14,16 @@ import java.util.Set;
 /** Slash command registry: definitions, dispatch, shared helpers and core handlers. */
 final class Commands {
 
-    static final long ADMINISTRATOR = 1L << 3;
+    static final long CREATE_INVITE = 1L << 0;
     static final long KICK_MEMBERS = 1L << 1;
     static final long BAN_MEMBERS = 1L << 2;
+    static final long ADMINISTRATOR = 1L << 3;
     static final long MANAGE_CHANNELS = 1L << 4;
+    static final long MANAGE_GUILD = 1L << 5;
+    static final long MANAGE_WEBHOOKS = 1L << 29;
+
+    /** Discord allows 100 commands per server, built-in and custom combined. */
+    static final int MAX_COMMANDS = 100;
     static final long MANAGE_MESSAGES = 1L << 13;
     static final long MANAGE_NICKNAMES = 1L << 27;
     static final long MANAGE_ROLES = 1L << 28;
@@ -63,6 +69,11 @@ final class Commands {
             + "`/hide` `/unhide` `/topic` `/nick` `/addrole` `/removerole` `/banlist` `/pin` `/unpin` `/say`\n"
             + "__Fun__\n"
             + "`/8ball` `/roll` `/coinflip` `/rps` `/joke` `/fact` `/quote` `/rate` `/reverse`\n"
+            + "__Server tools__\n"
+            + "`/joined` `/memberroles` `/userperms` `/createinvite` `/invites` `/webhooks` `/threads` "
+            + "`/events` `/stickers` `/emojiinfo` `/serverbanner` `/announce` `/dm` `/commandcount`\n"
+            + "__Converters__\n"
+            + "`/timezone` `/countdown` `/regex` `/binary` `/morse` `/convert`\n"
             + "__Info__\n"
             + "`/about` `/servericon` `/banner` `/timestamp` `/snowflake` `/myperms` `/pins` `/inviteinfo`\n"
             + "__Text tools__\n"
@@ -180,6 +191,49 @@ final class Commands {
             + "{\"type\":3,\"name\":\"thing\",\"description\":\"What to rate\",\"required\":true,\"max_length\":100}]},"
             + "{\"name\":\"reverse\",\"description\":\"Reverse some text\",\"options\":["
             + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to reverse\",\"required\":true,\"max_length\":500}]},"
+            + "{\"name\":\"joined\",\"description\":\"When a member joined and when their account was made\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true}]},"
+            + "{\"name\":\"memberroles\",\"description\":\"Roles a member has\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true}]},"
+            + "{\"name\":\"userperms\",\"description\":\"Permissions a member gets from their roles\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true}]},"
+            + "{\"name\":\"createinvite\",\"description\":\"Create an invite for this channel\",\"options\":["
+            + "{\"type\":4,\"name\":\"max_age\",\"description\":\"Seconds until it expires (0 = never)\",\"required\":false,\"min_value\":0,\"max_value\":604800},"
+            + "{\"type\":4,\"name\":\"max_uses\",\"description\":\"How many uses (0 = unlimited)\",\"required\":false,\"min_value\":0,\"max_value\":100}]},"
+            + "{\"name\":\"invites\",\"description\":\"Active invites in this server\",\"default_member_permissions\":\"32\"},"
+            + "{\"name\":\"webhooks\",\"description\":\"Webhooks in this channel\",\"default_member_permissions\":\"536870912\"},"
+            + "{\"name\":\"threads\",\"description\":\"Active threads in this channel\"},"
+            + "{\"name\":\"events\",\"description\":\"Scheduled events in this server\"},"
+            + "{\"name\":\"stickers\",\"description\":\"Custom stickers in this server\"},"
+            + "{\"name\":\"emojiinfo\",\"description\":\"Details about one custom emoji\",\"options\":["
+            + "{\"type\":3,\"name\":\"emoji\",\"description\":\"The emoji or its name\",\"required\":true,\"max_length\":100}]},"
+            + "{\"name\":\"announce\",\"description\":\"Post an announcement embed in a channel\",\"default_member_permissions\":\"8192\",\"options\":["
+            + "{\"type\":7,\"name\":\"channel\",\"description\":\"Where to post\",\"required\":true},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"What to announce\",\"required\":true,\"max_length\":2000}]},"
+            + "{\"name\":\"dm\",\"description\":\"Send a direct message as the bot\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Who to message\",\"required\":true},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Message text\",\"required\":true,\"max_length\":1500}]},"
+            + "{\"name\":\"timezone\",\"description\":\"Current time in a time zone\",\"options\":["
+            + "{\"type\":3,\"name\":\"zone\",\"description\":\"IANA zone, e.g. Europe/London\",\"required\":true,\"max_length\":64}]},"
+            + "{\"name\":\"countdown\",\"description\":\"Count down to a date (YYYY-MM-DD)\",\"options\":["
+            + "{\"type\":3,\"name\":\"date\",\"description\":\"2030-01-01 or 2030-01-01T18:30\",\"required\":true,\"max_length\":32}]},"
+            + "{\"name\":\"commandcount\",\"description\":\"How many of Discord's 100 command slots are used\"},"
+            + "{\"name\":\"serverbanner\",\"description\":\"Show this server's banner\"},"
+            + "{\"name\":\"regex\",\"description\":\"Test a regular expression against text\",\"options\":["
+            + "{\"type\":3,\"name\":\"pattern\",\"description\":\"Java regular expression\",\"required\":true,\"max_length\":200},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to search\",\"required\":true,\"max_length\":500}]},"
+            + "{\"name\":\"binary\",\"description\":\"Text to binary or binary to text\",\"options\":["
+            + "{\"type\":3,\"name\":\"mode\",\"description\":\"encode or decode\",\"required\":true,\"choices\":["
+            + "{\"name\":\"encode\",\"value\":\"encode\"},{\"name\":\"decode\",\"value\":\"decode\"}]},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to process\",\"required\":true,\"max_length\":1000}]},"
+            + "{\"name\":\"morse\",\"description\":\"Morse code encoder and decoder\",\"options\":["
+            + "{\"type\":3,\"name\":\"mode\",\"description\":\"encode or decode\",\"required\":true,\"choices\":["
+            + "{\"name\":\"encode\",\"value\":\"encode\"},{\"name\":\"decode\",\"value\":\"decode\"}]},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text or morse to process\",\"required\":true,\"max_length\":500}]},"
+            + "{\"name\":\"convert\",\"description\":\"Convert units of length, mass or temperature\",\"options\":["
+            + "{\"type\":10,\"name\":\"value\",\"description\":\"Amount to convert\",\"required\":true},"
+            + "{\"type\":3,\"name\":\"from\",\"description\":\"Unit, e.g. km or f\",\"required\":true,\"max_length\":8},"
+            + "{\"type\":3,\"name\":\"to\",\"description\":\"Target unit, e.g. mi or c\",\"required\":true,\"max_length\":8}]},"
             + "{\"name\":\"about\",\"description\":\"About BotDroid: version, commands and source\"},"
             + "{\"name\":\"servericon\",\"description\":\"Show this server's icon\"},"
             + "{\"name\":\"banner\",\"description\":\"Show a user profile banner\",\"options\":["
@@ -268,20 +322,33 @@ final class Commands {
             + "]";
 
     static JSONArray definitions() {
-        JSONArray merged;
-        try {
-            merged = new JSONArray(DEFINITIONS);
-        } catch (Exception e) {
-            merged = new JSONArray();
-        }
+        JSONArray merged = new JSONArray();
+        // Custom commands go first so a full server never hides the user's own commands.
         JSONArray custom = CustomCommands.definitions();
-        for (int i = 0; i < custom.length(); i++) {
+        for (int i = 0; i < custom.length() && merged.length() < MAX_COMMANDS; i++) {
             JSONObject entry = custom.optJSONObject(i);
             if (entry != null) {
                 merged.put(entry);
             }
         }
+        try {
+            JSONArray presets = new JSONArray(DEFINITIONS);
+            for (int i = 0; i < presets.length() && merged.length() < MAX_COMMANDS; i++) {
+                JSONObject entry = presets.optJSONObject(i);
+                if (entry != null && CommandToggles.isEnabled(entry.optString("name", ""))) {
+                    merged.put(entry);
+                }
+            }
+        } catch (Exception ignored) {
+            // keep the custom commands we already collected
+        }
         return merged;
+    }
+
+    /** Enabled built-ins that did not fit in Discord's 100 command limit. */
+    static int skippedPresetCount() {
+        int registeredPresets = Math.max(0, definitions().length() - CustomCommands.count());
+        return Math.max(0, CommandToggles.enabledCount() - registeredPresets);
     }
 
     static int presetCount() {
@@ -290,6 +357,26 @@ final class Commands {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    static JSONArray presetDefinitions() {
+        try {
+            return new JSONArray(DEFINITIONS);
+        } catch (Exception e) {
+            return new JSONArray();
+        }
+    }
+
+    static List<String> presetNames() {
+        List<String> names = new ArrayList<>();
+        JSONArray presets = presetDefinitions();
+        for (int i = 0; i < presets.length(); i++) {
+            JSONObject entry = presets.optJSONObject(i);
+            if (entry != null) {
+                names.add(entry.optString("name", ""));
+            }
+        }
+        return names;
     }
 
     static boolean isPreset(String name) {
@@ -318,6 +405,11 @@ final class Commands {
         try {
             JSONObject data = interaction.optJSONObject("data");
             String name = data == null ? "" : data.optString("name", "");
+            if (!name.isEmpty() && isPreset(name) && !CommandToggles.isEnabled(name)) {
+                respond(rest, interaction, "`/" + name + "` is turned off in BotDroid → Settings → Commands.",
+                        true, null);
+                return;
+            }
             if ("help".equals(name)) {
                 help(rest, interaction);
             } else if ("ping".equals(name)) {
@@ -414,6 +506,46 @@ final class Commands {
                 CommandsFun.rate(rest, interaction);
             } else if ("reverse".equals(name)) {
                 CommandsFun.reverse(rest, interaction);
+            } else if ("joined".equals(name)) {
+                CommandsMore.joined(rest, interaction);
+            } else if ("memberroles".equals(name)) {
+                CommandsMore.memberRoles(rest, interaction);
+            } else if ("userperms".equals(name)) {
+                CommandsMore.userPermissions(rest, interaction);
+            } else if ("createinvite".equals(name)) {
+                CommandsMore.createInvite(rest, interaction);
+            } else if ("invites".equals(name)) {
+                CommandsMore.invites(rest, interaction);
+            } else if ("webhooks".equals(name)) {
+                CommandsMore.webhooks(rest, interaction);
+            } else if ("threads".equals(name)) {
+                CommandsMore.threads(rest, interaction);
+            } else if ("events".equals(name)) {
+                CommandsMore.events(rest, interaction);
+            } else if ("stickers".equals(name)) {
+                CommandsMore.stickers(rest, interaction);
+            } else if ("emojiinfo".equals(name)) {
+                CommandsMore.emojiInfo(rest, interaction);
+            } else if ("announce".equals(name)) {
+                CommandsMore.announce(rest, interaction);
+            } else if ("dm".equals(name)) {
+                CommandsMore.dm(rest, interaction);
+            } else if ("timezone".equals(name)) {
+                CommandsMore.timezone(rest, interaction);
+            } else if ("countdown".equals(name)) {
+                CommandsMore.countdown(rest, interaction);
+            } else if ("commandcount".equals(name)) {
+                CommandsMore.commandCount(rest, interaction);
+            } else if ("serverbanner".equals(name)) {
+                CommandsMore.serverBanner(rest, interaction);
+            } else if ("regex".equals(name)) {
+                CommandsMore.regex(rest, interaction);
+            } else if ("binary".equals(name)) {
+                CommandsMore.binary(rest, interaction);
+            } else if ("morse".equals(name)) {
+                CommandsMore.morse(rest, interaction);
+            } else if ("convert".equals(name)) {
+                CommandsMore.convert(rest, interaction);
             } else if ("about".equals(name)) {
                 CommandsInfo.about(rest, interaction);
             } else if ("servericon".equals(name)) {
