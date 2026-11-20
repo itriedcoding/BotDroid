@@ -5,6 +5,8 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -42,6 +44,7 @@ final class DiscordBot {
     private volatile long lastAck = 0L;
     private volatile int sequence = -1;
     private volatile String applicationId;
+    private final Set<String> knownGuilds = ConcurrentHashMap.newKeySet();
 
     DiscordBot(String token, Listener listener) {
         this.token = token;
@@ -201,7 +204,12 @@ final class DiscordBot {
                     if ("READY".equals(type)) {
                         onReady(data);
                     } else if ("GUILD_CREATE".equals(type)) {
-                        registerCommands(data.optString("id", null));
+                        String guildId = data.optString("id", null);
+                        if (guildId != null) {
+                            knownGuilds.add(guildId);
+                            BotState.guildCount = knownGuilds.size();
+                        }
+                        registerCommands(guildId);
                     } else if ("INTERACTION_CREATE".equals(type)) {
                         onInteraction(data);
                     }
@@ -240,6 +248,7 @@ final class DiscordBot {
         JSONObject user = data.optJSONObject("user");
         if (user != null) {
             applicationId = user.optString("id", null);
+            BotState.applicationId = applicationId == null ? "" : applicationId;
             String name = user.optString("username", "bot");
             log("Logged in as " + name + " (" + applicationId + ")");
             status("Online as " + name);
@@ -257,6 +266,10 @@ final class DiscordBot {
                 }
             }
         }
+        for (String id : ids) {
+            knownGuilds.add(id);
+        }
+        BotState.guildCount = knownGuilds.size();
         log("Connected to " + ids.size() + " server(s)");
         for (final String id : ids) {
             registerCommands(id);
@@ -280,6 +293,31 @@ final class DiscordBot {
                 } else {
                     log("Could not register commands in server " + guildId + " (HTTP " + response.code + "): "
                             + shortBody(response.body));
+                }
+            }
+        });
+    }
+
+    /** Re-registers the command set (preset plus custom) in every known server. */
+    void refreshCommands() {
+        if (registrar.isShutdown()) {
+            return;
+        }
+        registrar.submit(new Runnable() {
+            @Override
+            public void run() {
+                String appId = applicationId;
+                if (appId == null) {
+                    return;
+                }
+                String body = Commands.definitions().toString();
+                for (String guildId : knownGuilds) {
+                    Net.Resp response = rest.put("/applications/" + appId + "/guilds/" + guildId + "/commands", body);
+                    if (response.ok()) {
+                        log("Commands refreshed in server " + guildId);
+                    } else {
+                        log("Command refresh failed in server " + guildId + " (HTTP " + response.code + ")");
+                    }
                 }
             }
         });

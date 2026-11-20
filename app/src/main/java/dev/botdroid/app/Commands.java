@@ -4,21 +4,24 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.net.URLEncoder;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
-/** Preset slash commands and their handlers. */
+/** Slash command registry: definitions, dispatch, shared helpers and core handlers. */
 final class Commands {
 
-    private static final long ADMINISTRATOR = 1L << 3;
-    private static final long KICK_MEMBERS = 1L << 1;
-    private static final long BAN_MEMBERS = 1L << 2;
-    private static final long MANAGE_CHANNELS = 1L << 4;
-    private static final long MANAGE_MESSAGES = 1L << 13;
-    private static final long MODERATE_MEMBERS = 1L << 40;
+    static final long ADMINISTRATOR = 1L << 3;
+    static final long KICK_MEMBERS = 1L << 1;
+    static final long BAN_MEMBERS = 1L << 2;
+    static final long MANAGE_CHANNELS = 1L << 4;
+    static final long MANAGE_MESSAGES = 1L << 13;
+    static final long MANAGE_NICKNAMES = 1L << 27;
+    static final long MANAGE_ROLES = 1L << 28;
+    static final long MODERATE_MEMBERS = 1L << 40;
 
     private static final Random RANDOM = new Random();
 
@@ -30,30 +33,65 @@ final class Commands {
             "Outlook not so good.", "Very doubtful."
     };
 
-    private static final String HELP = "**BotDroid — command list**\n"
+    private static final String HELP = "**BotDroid " + BotState.VERSION + " — commands**\n"
+            + "__Core__\n"
+            + "`/help` `/ping` `/botinfo` `/uptime` `/invite`\n"
+            + "__Server and users__\n"
+            + "`/serverinfo` `/membercount` `/roles` `/channelinfo` `/emojis` `/userinfo` `/avatar`\n"
             + "__Utility__\n"
-            + "`/help` — this list\n"
-            + "`/ping` — check latency\n"
-            + "`/serverinfo` — server details\n"
-            + "`/userinfo [user]` — user details\n"
-            + "`/avatar [user]` — user avatar\n"
+            + "`/time` `/math` `/random` `/choose` `/poll` `/remind` `/base64` `/color`\n"
             + "__Moderation__\n"
-            + "`/ban <user> [reason]` — ban a member\n"
-            + "`/unban <user_id> [reason]` — lift a ban\n"
-            + "`/kick <user> [reason]` — kick a member\n"
-            + "`/timeout <user> <minutes> [reason]` — temporarily mute\n"
-            + "`/purge <count>` — delete recent messages\n"
-            + "`/slowmode <seconds>` — set channel slowmode\n"
-            + "`/say <text>` — post a message as the bot\n"
+            + "`/ban` `/unban` `/softban` `/kick` `/timeout` `/purge` `/slowmode` `/lock` `/unlock` "
+            + "`/hide` `/unhide` `/topic` `/nick` `/addrole` `/removerole` `/banlist` `/pin` `/unpin` `/say`\n"
             + "__Fun__\n"
-            + "`/8ball <question>` — ask the magic 8-ball\n"
-            + "`/roll [2d6]` — roll dice\n"
-            + "_Moderation commands require the matching Discord permission._";
+            + "`/8ball` `/roll` `/coinflip` `/rps` `/joke` `/fact` `/quote` `/rate` `/reverse`\n"
+            + "__Roblox__\n"
+            + "`/roblox user|avatar|game|group`\n"
+            + "__Custom__\n"
+            + "`/custom add|remove|list|clear`\n"
+            + "Build your own: `/custom add name:hello response:Hi {user}!`";
+
+    private static volatile Set<String> presetNames;
+
+    private Commands() {
+    }
+
+    // ------------------------------------------------------------- definitions
 
     private static final String DEFINITIONS = "["
             + "{\"name\":\"help\",\"description\":\"Show every command BotDroid can run\"},"
             + "{\"name\":\"ping\",\"description\":\"Check the bot latency and connection\"},"
+            + "{\"name\":\"botinfo\",\"description\":\"Bot version, uptime and server count\"},"
+            + "{\"name\":\"uptime\",\"description\":\"How long the bot has been running\"},"
+            + "{\"name\":\"invite\",\"description\":\"Get the bot invite link\"},"
             + "{\"name\":\"serverinfo\",\"description\":\"Show information about this server\"},"
+            + "{\"name\":\"membercount\",\"description\":\"Member and online counts\"},"
+            + "{\"name\":\"roles\",\"description\":\"List this server's roles\"},"
+            + "{\"name\":\"channelinfo\",\"description\":\"Details about this channel\"},"
+            + "{\"name\":\"emojis\",\"description\":\"List this server's custom emojis\"},"
+            + "{\"name\":\"time\",\"description\":\"Show the current time\"},"
+            + "{\"name\":\"math\",\"description\":\"Evaluate a maths expression\",\"options\":["
+            + "{\"type\":3,\"name\":\"expression\",\"description\":\"Example: (2+3)*4\",\"required\":true,\"max_length\":120}]},"
+            + "{\"name\":\"random\",\"description\":\"Random number in a range\",\"options\":["
+            + "{\"type\":4,\"name\":\"min\",\"description\":\"Minimum\",\"required\":true},"
+            + "{\"type\":4,\"name\":\"max\",\"description\":\"Maximum\",\"required\":true}]},"
+            + "{\"name\":\"choose\",\"description\":\"Pick one of your options\",\"options\":["
+            + "{\"type\":3,\"name\":\"options\",\"description\":\"Separate options with |\",\"required\":true,\"max_length\":500}]},"
+            + "{\"name\":\"poll\",\"description\":\"Create a reaction poll\",\"options\":["
+            + "{\"type\":3,\"name\":\"question\",\"description\":\"Poll question\",\"required\":true,\"max_length\":200},"
+            + "{\"type\":3,\"name\":\"option1\",\"description\":\"First option\",\"required\":true,\"max_length\":80},"
+            + "{\"type\":3,\"name\":\"option2\",\"description\":\"Second option\",\"required\":true,\"max_length\":80},"
+            + "{\"type\":3,\"name\":\"option3\",\"description\":\"Third option\",\"required\":false,\"max_length\":80},"
+            + "{\"type\":3,\"name\":\"option4\",\"description\":\"Fourth option\",\"required\":false,\"max_length\":80}]},"
+            + "{\"name\":\"remind\",\"description\":\"Set a reminder in this channel\",\"options\":["
+            + "{\"type\":4,\"name\":\"minutes\",\"description\":\"Minutes from now (1-10080)\",\"required\":true,\"min_value\":1,\"max_value\":10080},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"What to remind you about\",\"required\":true,\"max_length\":500}]},"
+            + "{\"name\":\"base64\",\"description\":\"Encode or decode base64\",\"options\":["
+            + "{\"type\":3,\"name\":\"mode\",\"description\":\"encode or decode\",\"required\":true,\"choices\":["
+            + "{\"name\":\"encode\",\"value\":\"encode\"},{\"name\":\"decode\",\"value\":\"decode\"}]},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to process\",\"required\":true,\"max_length\":1500}]},"
+            + "{\"name\":\"color\",\"description\":\"Preview a hex colour\",\"options\":["
+            + "{\"type\":3,\"name\":\"hex\",\"description\":\"For example #5865F2\",\"required\":true,\"max_length\":12}]},"
             + "{\"name\":\"userinfo\",\"description\":\"Show information about a user\",\"options\":["
             + "{\"type\":6,\"name\":\"user\",\"description\":\"User to look up (defaults to you)\",\"required\":false}]},"
             + "{\"name\":\"avatar\",\"description\":\"Show a user avatar\",\"options\":["
@@ -63,6 +101,9 @@ final class Commands {
             + "{\"type\":3,\"name\":\"reason\",\"description\":\"Reason for the ban\",\"required\":false,\"max_length\":512}]},"
             + "{\"name\":\"unban\",\"description\":\"Remove a ban using the user ID\",\"default_member_permissions\":\"4\",\"options\":["
             + "{\"type\":3,\"name\":\"user_id\",\"description\":\"ID of the banned user\",\"required\":true},"
+            + "{\"type\":3,\"name\":\"reason\",\"description\":\"Reason\",\"required\":false,\"max_length\":512}]},"
+            + "{\"name\":\"softban\",\"description\":\"Ban then unban to delete recent messages\",\"default_member_permissions\":\"4\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member to softban\",\"required\":true},"
             + "{\"type\":3,\"name\":\"reason\",\"description\":\"Reason\",\"required\":false,\"max_length\":512}]},"
             + "{\"name\":\"kick\",\"description\":\"Kick a member from this server\",\"default_member_permissions\":\"2\",\"options\":["
             + "{\"type\":6,\"name\":\"user\",\"description\":\"Member to kick\",\"required\":true},"
@@ -75,24 +116,108 @@ final class Commands {
             + "{\"type\":4,\"name\":\"count\",\"description\":\"How many messages (1-100)\",\"required\":true,\"min_value\":1,\"max_value\":100}]},"
             + "{\"name\":\"slowmode\",\"description\":\"Set channel slowmode\",\"default_member_permissions\":\"16\",\"options\":["
             + "{\"type\":4,\"name\":\"seconds\",\"description\":\"Seconds between messages (0-21600)\",\"required\":true,\"min_value\":0,\"max_value\":21600}]},"
+            + "{\"name\":\"lock\",\"description\":\"Stop @everyone sending messages here\",\"default_member_permissions\":\"16\"},"
+            + "{\"name\":\"unlock\",\"description\":\"Allow @everyone to send messages here\",\"default_member_permissions\":\"16\"},"
+            + "{\"name\":\"hide\",\"description\":\"Hide this channel from @everyone\",\"default_member_permissions\":\"16\"},"
+            + "{\"name\":\"unhide\",\"description\":\"Make this channel visible to @everyone\",\"default_member_permissions\":\"16\"},"
+            + "{\"name\":\"topic\",\"description\":\"Set or clear this channel's topic\",\"default_member_permissions\":\"16\",\"options\":["
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"New topic (empty clears it)\",\"required\":false,\"max_length\":1024}]},"
+            + "{\"name\":\"nick\",\"description\":\"Change a member nickname\",\"default_member_permissions\":\"134217728\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true},"
+            + "{\"type\":3,\"name\":\"name\",\"description\":\"New nickname (empty resets it)\",\"required\":false,\"max_length\":32}]},"
+            + "{\"name\":\"addrole\",\"description\":\"Give a member a role\",\"default_member_permissions\":\"268435456\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true},"
+            + "{\"type\":8,\"name\":\"role\",\"description\":\"Role to add\",\"required\":true}]},"
+            + "{\"name\":\"removerole\",\"description\":\"Remove a role from a member\",\"default_member_permissions\":\"268435456\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true},"
+            + "{\"type\":8,\"name\":\"role\",\"description\":\"Role to remove\",\"required\":true}]},"
+            + "{\"name\":\"banlist\",\"description\":\"Show recent bans\",\"default_member_permissions\":\"4\"},"
+            + "{\"name\":\"pin\",\"description\":\"Pin a message by ID\",\"default_member_permissions\":\"8192\",\"options\":["
+            + "{\"type\":3,\"name\":\"message_id\",\"description\":\"Message ID\",\"required\":true,\"max_length\":32}]},"
+            + "{\"name\":\"unpin\",\"description\":\"Unpin a message by ID\",\"default_member_permissions\":\"8192\",\"options\":["
+            + "{\"type\":3,\"name\":\"message_id\",\"description\":\"Message ID\",\"required\":true,\"max_length\":32}]},"
             + "{\"name\":\"say\",\"description\":\"Make BotDroid post a message\",\"default_member_permissions\":\"8192\",\"options\":["
             + "{\"type\":3,\"name\":\"text\",\"description\":\"Message to send\",\"required\":true,\"max_length\":2000}]},"
             + "{\"name\":\"8ball\",\"description\":\"Ask the magic 8-ball a question\",\"options\":["
             + "{\"type\":3,\"name\":\"question\",\"description\":\"Your question\",\"required\":true,\"max_length\":200}]},"
             + "{\"name\":\"roll\",\"description\":\"Roll dice, for example 2d6\",\"options\":["
-            + "{\"type\":3,\"name\":\"dice\",\"description\":\"Format NdN (default 1d6)\",\"required\":false}]}"
+            + "{\"type\":3,\"name\":\"dice\",\"description\":\"Format NdN (default 1d6)\",\"required\":false,\"max_length\":12}]},"
+            + "{\"name\":\"coinflip\",\"description\":\"Flip a coin\"},"
+            + "{\"name\":\"rps\",\"description\":\"Play rock paper scissors\",\"options\":["
+            + "{\"type\":3,\"name\":\"choice\",\"description\":\"Your move\",\"required\":true,\"choices\":["
+            + "{\"name\":\"rock\",\"value\":\"rock\"},{\"name\":\"paper\",\"value\":\"paper\"},{\"name\":\"scissors\",\"value\":\"scissors\"}]}]},"
+            + "{\"name\":\"joke\",\"description\":\"Tell a programming joke\"},"
+            + "{\"name\":\"fact\",\"description\":\"Share a random fact\"},"
+            + "{\"name\":\"quote\",\"description\":\"Share a random quote\"},"
+            + "{\"name\":\"rate\",\"description\":\"Rate something out of 100\",\"options\":["
+            + "{\"type\":3,\"name\":\"thing\",\"description\":\"What to rate\",\"required\":true,\"max_length\":100}]},"
+            + "{\"name\":\"reverse\",\"description\":\"Reverse some text\",\"options\":["
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to reverse\",\"required\":true,\"max_length\":500}]},"
+            + "{\"name\":\"roblox\",\"description\":\"Roblox lookups\",\"options\":["
+            + "{\"type\":1,\"name\":\"user\",\"description\":\"Look up a Roblox user\",\"options\":["
+            + "{\"type\":3,\"name\":\"username\",\"description\":\"Roblox username\",\"required\":true,\"max_length\":32}]},"
+            + "{\"type\":1,\"name\":\"avatar\",\"description\":\"Show a Roblox avatar\",\"options\":["
+            + "{\"type\":3,\"name\":\"username\",\"description\":\"Roblox username\",\"required\":true,\"max_length\":32}]},"
+            + "{\"type\":1,\"name\":\"game\",\"description\":\"Look up a Roblox game\",\"options\":["
+            + "{\"type\":3,\"name\":\"universe_id\",\"description\":\"Roblox universe ID\",\"required\":true,\"max_length\":24}]},"
+            + "{\"type\":1,\"name\":\"group\",\"description\":\"Look up a Roblox group\",\"options\":["
+            + "{\"type\":3,\"name\":\"group_id\",\"description\":\"Roblox group ID\",\"required\":true,\"max_length\":24}]}]},"
+            + "{\"name\":\"custom\",\"description\":\"Create and manage your own commands\",\"options\":["
+            + "{\"type\":1,\"name\":\"add\",\"description\":\"Create or overwrite a command\",\"options\":["
+            + "{\"type\":3,\"name\":\"name\",\"description\":\"Command name, e.g. discord\",\"required\":true,\"max_length\":32},"
+            + "{\"type\":3,\"name\":\"response\",\"description\":\"What it replies with\",\"required\":true,\"max_length\":1500}]},"
+            + "{\"type\":1,\"name\":\"remove\",\"description\":\"Delete a command\",\"options\":["
+            + "{\"type\":3,\"name\":\"name\",\"description\":\"Command name\",\"required\":true,\"max_length\":32}]},"
+            + "{\"type\":1,\"name\":\"list\",\"description\":\"List custom commands\"},"
+            + "{\"type\":1,\"name\":\"clear\",\"description\":\"Delete every custom command\"}]}"
             + "]";
 
-    private Commands() {
+    static JSONArray definitions() {
+        JSONArray merged;
+        try {
+            merged = new JSONArray(DEFINITIONS);
+        } catch (Exception e) {
+            merged = new JSONArray();
+        }
+        JSONArray custom = CustomCommands.definitions();
+        for (int i = 0; i < custom.length(); i++) {
+            JSONObject entry = custom.optJSONObject(i);
+            if (entry != null) {
+                merged.put(entry);
+            }
+        }
+        return merged;
     }
 
-    static JSONArray definitions() {
+    static int presetCount() {
         try {
-            return new JSONArray(DEFINITIONS);
+            return new JSONArray(DEFINITIONS).length();
         } catch (Exception e) {
-            return new JSONArray();
+            return 0;
         }
     }
+
+    static boolean isPreset(String name) {
+        Set<String> names = presetNames;
+        if (names == null) {
+            names = new HashSet<>();
+            try {
+                JSONArray array = new JSONArray(DEFINITIONS);
+                for (int i = 0; i < array.length(); i++) {
+                    JSONObject command = array.optJSONObject(i);
+                    if (command != null) {
+                        names.add(command.optString("name", ""));
+                    }
+                }
+            } catch (Exception ignored) {
+                // treat as empty, the dispatcher still guards
+            }
+            presetNames = names;
+        }
+        return names.contains(name);
+    }
+
+    // ---------------------------------------------------------------- dispatch
 
     static void handle(DiscordRest rest, JSONObject interaction) {
         try {
@@ -102,8 +227,38 @@ final class Commands {
                 help(rest, interaction);
             } else if ("ping".equals(name)) {
                 ping(rest, interaction);
+            } else if ("botinfo".equals(name)) {
+                CommandsUtil.botInfo(rest, interaction);
+            } else if ("uptime".equals(name)) {
+                CommandsUtil.uptime(rest, interaction);
+            } else if ("invite".equals(name)) {
+                CommandsUtil.invite(rest, interaction);
             } else if ("serverinfo".equals(name)) {
                 serverInfo(rest, interaction);
+            } else if ("membercount".equals(name)) {
+                CommandsUtil.memberCount(rest, interaction);
+            } else if ("roles".equals(name)) {
+                CommandsUtil.roles(rest, interaction);
+            } else if ("channelinfo".equals(name)) {
+                CommandsUtil.channelInfo(rest, interaction);
+            } else if ("emojis".equals(name)) {
+                CommandsUtil.emojis(rest, interaction);
+            } else if ("time".equals(name)) {
+                CommandsUtil.time(rest, interaction);
+            } else if ("math".equals(name)) {
+                CommandsUtil.math(rest, interaction);
+            } else if ("random".equals(name)) {
+                CommandsUtil.random(rest, interaction);
+            } else if ("choose".equals(name)) {
+                CommandsUtil.choose(rest, interaction);
+            } else if ("poll".equals(name)) {
+                CommandsUtil.poll(rest, interaction);
+            } else if ("remind".equals(name)) {
+                CommandsUtil.remind(rest, interaction);
+            } else if ("base64".equals(name)) {
+                CommandsUtil.base64(rest, interaction);
+            } else if ("color".equals(name)) {
+                CommandsUtil.color(rest, interaction);
             } else if ("userinfo".equals(name)) {
                 userInfo(rest, interaction);
             } else if ("avatar".equals(name)) {
@@ -112,6 +267,8 @@ final class Commands {
                 ban(rest, interaction);
             } else if ("unban".equals(name)) {
                 unban(rest, interaction);
+            } else if ("softban".equals(name)) {
+                CommandsMod.softban(rest, interaction);
             } else if ("kick".equals(name)) {
                 kick(rest, interaction);
             } else if ("timeout".equals(name)) {
@@ -120,14 +277,59 @@ final class Commands {
                 purge(rest, interaction);
             } else if ("slowmode".equals(name)) {
                 slowmode(rest, interaction);
+            } else if ("lock".equals(name)) {
+                CommandsMod.lock(rest, interaction);
+            } else if ("unlock".equals(name)) {
+                CommandsMod.unlock(rest, interaction);
+            } else if ("hide".equals(name)) {
+                CommandsMod.hide(rest, interaction);
+            } else if ("unhide".equals(name)) {
+                CommandsMod.unhide(rest, interaction);
+            } else if ("topic".equals(name)) {
+                CommandsMod.topic(rest, interaction);
+            } else if ("nick".equals(name)) {
+                CommandsMod.nick(rest, interaction);
+            } else if ("addrole".equals(name)) {
+                CommandsMod.addRole(rest, interaction);
+            } else if ("removerole".equals(name)) {
+                CommandsMod.removeRole(rest, interaction);
+            } else if ("banlist".equals(name)) {
+                CommandsMod.banList(rest, interaction);
+            } else if ("pin".equals(name)) {
+                CommandsMod.pin(rest, interaction);
+            } else if ("unpin".equals(name)) {
+                CommandsMod.unpin(rest, interaction);
             } else if ("say".equals(name)) {
                 say(rest, interaction);
             } else if ("8ball".equals(name)) {
                 eightBall(rest, interaction);
             } else if ("roll".equals(name)) {
                 roll(rest, interaction);
+            } else if ("coinflip".equals(name)) {
+                CommandsFun.coinFlip(rest, interaction);
+            } else if ("rps".equals(name)) {
+                CommandsFun.rps(rest, interaction);
+            } else if ("joke".equals(name)) {
+                CommandsFun.joke(rest, interaction);
+            } else if ("fact".equals(name)) {
+                CommandsFun.fact(rest, interaction);
+            } else if ("quote".equals(name)) {
+                CommandsFun.quote(rest, interaction);
+            } else if ("rate".equals(name)) {
+                CommandsFun.rate(rest, interaction);
+            } else if ("reverse".equals(name)) {
+                CommandsFun.reverse(rest, interaction);
+            } else if ("roblox".equals(name)) {
+                CommandsRoblox.handle(rest, interaction);
+            } else if ("custom".equals(name)) {
+                CommandsCustom.handle(rest, interaction);
             } else {
-                respond(rest, interaction, "That command is not available in this build: `/" + name + "`", true, null);
+                String custom = CustomCommands.response(name);
+                if (custom != null) {
+                    respond(rest, interaction, CommandsCustom.render(custom, interaction), false, null);
+                } else {
+                    respond(rest, interaction, "Unknown command `/" + name + "`. Try `/help`.", true, null);
+                }
             }
         } catch (Exception e) {
             try {
@@ -138,7 +340,7 @@ final class Commands {
         }
     }
 
-    // ---------------------------------------------------------------- utility
+    // ------------------------------------------------------------------- core
 
     private static void help(DiscordRest rest, JSONObject interaction) throws Exception {
         respond(rest, interaction, HELP, true, null);
@@ -161,7 +363,7 @@ final class Commands {
         }
         Net.Resp response = rest.get("/guilds/" + guildId + "?with_counts=true");
         if (!response.ok()) {
-            respond(rest, interaction, failure(response, "View Server Insights"), true, null);
+            respond(rest, interaction, failure(response, "View Channels"), true, null);
             return;
         }
         JSONObject guild = new JSONObject(response.body);
@@ -184,10 +386,7 @@ final class Commands {
         description.append("**Boost tier:** ").append(guild.optInt("premium_tier", 0)).append("\n");
         description.append("**Verification level:** ").append(guild.optInt("verification_level", 0));
 
-        JSONObject embed = new JSONObject();
-        embed.put("title", name);
-        embed.put("color", 0x5865F2);
-        embed.put("description", description.toString());
+        JSONObject embed = embed(name, 0x5865F2, description.toString());
         if (icon != null && !icon.isEmpty() && !"null".equals(icon)) {
             embed.put("thumbnail", new JSONObject().put("url",
                     "https://cdn.discordapp.com/icons/" + guildId + "/" + icon + ".png?size=256"));
@@ -242,10 +441,8 @@ final class Commands {
             }
         }
 
-        JSONObject embed = new JSONObject();
-        embed.put("title", globalName.isEmpty() ? username : globalName);
-        embed.put("color", isBot ? 0x5865F2 : 0x23A55A);
-        embed.put("description", description.toString());
+        JSONObject embed = embed(globalName.isEmpty() ? username : globalName, isBot ? 0x5865F2 : 0x23A55A,
+                description.toString());
         embed.put("thumbnail", new JSONObject().put("url", avatarUrl(userId, user.optString("avatar", null))));
         respond(rest, interaction, "", true, new JSONArray().put(embed));
     }
@@ -268,9 +465,7 @@ final class Commands {
             username = user.optString("username", null);
         }
         String url = avatarUrl(userId, hash);
-        JSONObject embed = new JSONObject();
-        embed.put("title", username == null ? "Avatar" : username + "'s avatar");
-        embed.put("color", 0x5865F2);
+        JSONObject embed = embed(username == null ? "Avatar" : username + "'s avatar", 0x5865F2, null);
         embed.put("image", new JSONObject().put("url", url));
         respond(rest, interaction, "", true, new JSONArray().put(embed));
     }
@@ -380,7 +575,8 @@ final class Commands {
         int minutes = Math.max(1, Math.min(10080, optInt(interaction, "minutes", 10)));
         String reason = orDefault(optString(interaction, "reason"), "No reason provided");
         JSONObject body = new JSONObject();
-        body.put("communication_disabled_until", Instant.now().plusSeconds(minutes * 60L).toString());
+        body.put("communication_disabled_until",
+                java.time.Instant.now().plusSeconds(minutes * 60L).toString());
         Net.Resp response = rest.patch("/guilds/" + guildId + "/members/" + userId + "?reason=" + encode(reason),
                 body.toString());
         if (response.ok()) {
@@ -422,7 +618,8 @@ final class Commands {
             }
         }
         if (ids.isEmpty()) {
-            respond(rest, interaction, "Nothing recent enough to delete (Discord only bulk deletes messages under 14 days old).",
+            respond(rest, interaction,
+                    "Nothing recent enough to delete (Discord only bulk deletes messages under 14 days old).",
                     true, null);
             return;
         }
@@ -538,10 +735,22 @@ final class Commands {
                 + (count > 1 ? "\n**Total:** " + total : ""), false, null);
     }
 
-    // --------------------------------------------------------------- helpers
+    // ---------------------------------------------------------------- helpers
 
-    private static void respond(DiscordRest rest, JSONObject interaction, String content, boolean ephemeral,
-                                JSONArray embeds) {
+    static JSONObject embed(String title, int color, String description) throws Exception {
+        JSONObject embed = new JSONObject();
+        if (title != null && !title.isEmpty()) {
+            embed.put("title", title);
+        }
+        embed.put("color", color);
+        if (description != null && !description.isEmpty()) {
+            embed.put("description", description);
+        }
+        return embed;
+    }
+
+    static void respond(DiscordRest rest, JSONObject interaction, String content, boolean ephemeral,
+                        JSONArray embeds) {
         try {
             JSONObject data = new JSONObject();
             data.put("content", content == null ? "" : content);
@@ -562,7 +771,7 @@ final class Commands {
         }
     }
 
-    private static String failure(Net.Resp response, String permission) {
+    static String failure(Net.Resp response, String permission) {
         if (response.code < 0) {
             return "Network problem while talking to Discord: " + response.body;
         }
@@ -576,21 +785,55 @@ final class Commands {
         if (response.code == 401) {
             return "Discord rejected the bot token (401). Save a fresh token and restart.";
         }
-        String message = "";
-        try {
-            message = new JSONObject(response.body).optString("message", "");
-        } catch (Exception ignored) {
-            message = response.body == null ? "" : response.body;
-        }
+        String message = apiMessage(response.body);
         return "Discord error " + response.code + (message.isEmpty() ? "" : ": " + message);
     }
 
-    private static JSONObject option(JSONObject interaction, String name) {
+    static String apiMessage(String body) {
+        if (body == null) {
+            return "";
+        }
+        try {
+            return new JSONObject(body).optString("message", "");
+        } catch (Exception e) {
+            return body.length() > 120 ? body.substring(0, 120) : body;
+        }
+    }
+
+    static JSONObject subcommand(JSONObject interaction) {
         JSONObject data = interaction.optJSONObject("data");
         if (data == null) {
             return null;
         }
         JSONArray options = data.optJSONArray("options");
+        if (options == null) {
+            return null;
+        }
+        for (int i = 0; i < options.length(); i++) {
+            JSONObject option = options.optJSONObject(i);
+            if (option != null && option.optInt("type", 0) == 1) {
+                return option;
+            }
+        }
+        return null;
+    }
+
+    static String subcommandName(JSONObject interaction) {
+        JSONObject sub = subcommand(interaction);
+        if (sub == null) {
+            return null;
+        }
+        String name = sub.optString("name", "");
+        return name.isEmpty() ? null : name;
+    }
+
+    static JSONObject option(JSONObject interaction, String name) {
+        JSONObject data = interaction.optJSONObject("data");
+        if (data == null) {
+            return null;
+        }
+        JSONObject sub = subcommand(interaction);
+        JSONArray options = sub != null ? sub.optJSONArray("options") : data.optJSONArray("options");
         if (options == null) {
             return null;
         }
@@ -603,7 +846,7 @@ final class Commands {
         return null;
     }
 
-    private static String optString(JSONObject interaction, String name) {
+    static String optString(JSONObject interaction, String name) {
         JSONObject option = option(interaction, name);
         if (option == null || !option.has("value")) {
             return null;
@@ -611,7 +854,7 @@ final class Commands {
         return option.optString("value", null);
     }
 
-    private static int optInt(JSONObject interaction, String name, int fallback) {
+    static int optInt(JSONObject interaction, String name, int fallback) {
         JSONObject option = option(interaction, name);
         if (option == null || !option.has("value")) {
             return fallback;
@@ -619,7 +862,7 @@ final class Commands {
         return option.optInt("value", fallback);
     }
 
-    private static String displayName(JSONObject interaction, String optionName, String fallbackId) {
+    static String displayName(JSONObject interaction, String optionName, String fallbackId) {
         JSONObject option = option(interaction, optionName);
         JSONObject user = option == null ? null : option.optJSONObject("user");
         if (user != null) {
@@ -633,7 +876,7 @@ final class Commands {
         return "<@" + fallbackId + ">";
     }
 
-    private static String invokerId(JSONObject interaction) {
+    static String invokerId(JSONObject interaction) {
         JSONObject member = interaction.optJSONObject("member");
         if (member != null) {
             JSONObject user = member.optJSONObject("user");
@@ -645,7 +888,17 @@ final class Commands {
         return user == null ? null : user.optString("id", null);
     }
 
-    private static long invokerPermissions(JSONObject interaction) {
+    static String invokerName(JSONObject interaction) {
+        JSONObject member = interaction.optJSONObject("member");
+        JSONObject user = member == null ? interaction.optJSONObject("user") : member.optJSONObject("user");
+        if (user == null) {
+            return null;
+        }
+        String globalName = user.optString("global_name", "");
+        return globalName.isEmpty() ? user.optString("username", null) : globalName;
+    }
+
+    static long invokerPermissions(JSONObject interaction) {
         JSONObject member = interaction.optJSONObject("member");
         if (member == null) {
             return 0L;
@@ -658,24 +911,24 @@ final class Commands {
         }
     }
 
-    private static boolean can(JSONObject interaction, long permission) {
+    static boolean can(JSONObject interaction, long permission) {
         long permissions = invokerPermissions(interaction);
         return (permissions & ADMINISTRATOR) != 0 || (permissions & permission) != 0;
     }
 
-    private static String guildId(JSONObject interaction) {
+    static String guildId(JSONObject interaction) {
         String value = interaction.has("guild_id") && !interaction.isNull("guild_id")
                 ? interaction.optString("guild_id", null) : null;
         return value == null || value.isEmpty() ? null : value;
     }
 
-    private static String channelId(JSONObject interaction) {
+    static String channelId(JSONObject interaction) {
         String value = interaction.has("channel_id") && !interaction.isNull("channel_id")
                 ? interaction.optString("channel_id", null) : null;
         return value == null || value.isEmpty() ? null : value;
     }
 
-    private static long snowflakeTime(String id) {
+    static long snowflakeTime(String id) {
         try {
             return (Long.parseLong(id) >> 22) + 1420070400000L;
         } catch (NumberFormatException e) {
@@ -683,7 +936,7 @@ final class Commands {
         }
     }
 
-    private static String avatarUrl(String userId, String hash) {
+    static String avatarUrl(String userId, String hash) {
         if (hash == null || hash.isEmpty() || "null".equals(hash)) {
             int index = 0;
             try {
@@ -697,11 +950,11 @@ final class Commands {
         return "https://cdn.discordapp.com/avatars/" + userId + "/" + hash + extension + "?size=1024";
     }
 
-    private static String orDefault(String value, String fallback) {
+    static String orDefault(String value, String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value;
     }
 
-    private static String encode(String value) {
+    static String encode(String value) {
         try {
             return URLEncoder.encode(value, "UTF-8").replace("+", "%20");
         } catch (Exception e) {

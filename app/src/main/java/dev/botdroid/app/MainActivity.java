@@ -43,6 +43,12 @@ public class MainActivity extends Activity implements LogBus.Listener {
                 toggle();
             }
         });
+        findViewById(R.id.settings_button).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+            }
+        });
         findViewById(R.id.portal_link).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {

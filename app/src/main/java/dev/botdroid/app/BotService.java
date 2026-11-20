@@ -26,6 +26,8 @@ public class BotService extends Service {
     private static volatile boolean running = false;
     private static volatile String currentStatus = "Stopped";
 
+    private static volatile DiscordBot current;
+
     private DiscordBot bot;
     private PowerManager.WakeLock wakeLock;
 
@@ -48,6 +50,15 @@ public class BotService extends Service {
         context.startService(new Intent(context, BotService.class).setAction(ACTION_STOP));
     }
 
+    static void refreshCommands(Context context) {
+        DiscordBot bot = current;
+        if (bot != null) {
+            bot.refreshCommands();
+        } else {
+            LogBus.log("Start the bot before refreshing commands");
+        }
+    }
+
     @Override
     public IBinder onBind(Intent intent) {
         return null;
@@ -57,6 +68,15 @@ public class BotService extends Service {
     public void onCreate() {
         super.onCreate();
         createChannel();
+        BotState.robloxEnabled = Prefs.robloxEnabled(this);
+        CustomCommands.load(Prefs.customCommands(this));
+        CustomCommands.setSaver(json -> Prefs.customCommands(getApplicationContext(), json));
+        CustomCommands.setOnChange(() -> {
+            DiscordBot bot = current;
+            if (bot != null) {
+                bot.refreshCommands();
+            }
+        });
     }
 
     @Override
@@ -118,6 +138,8 @@ public class BotService extends Service {
                 shutdown();
             }
         });
+        current = bot;
+        BotState.startedAt = System.currentTimeMillis();
         bot.start();
         return START_STICKY;
     }
@@ -135,6 +157,7 @@ public class BotService extends Service {
 
     private void shutdown() {
         running = false;
+        current = null;
         if (bot != null) {
             bot.shutdown();
             bot = null;
