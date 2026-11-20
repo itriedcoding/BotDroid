@@ -20,7 +20,7 @@ mkdir -p "$WORK/dev/botdroid/app" "$WORK/classes"
 SRC="$ROOT/app/src/main/java/dev/botdroid/app"
 cp "$SRC/Commands.java" "$SRC/CommandsUtil.java" "$SRC/CommandsMod.java" "$SRC/CommandsFun.java" \
    "$SRC/CommandsRoblox.java" "$SRC/CommandsCustom.java" "$SRC/CustomCommands.java" \
-   "$SRC/BotState.java" "$SRC/RobloxApi.java" "$WORK/dev/botdroid/app/"
+   "$SRC/BotState.java" "$SRC/RobloxApi.java" "$SRC/BotPresence.java" "$WORK/dev/botdroid/app/"
 cp "$ROOT/tools/devtest/harness/"*.java "$WORK/dev/botdroid/app/"
 cp "$ROOT/tools/devtest/TestNew.java" "$WORK/dev/botdroid/app/"
 

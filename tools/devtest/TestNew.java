@@ -29,6 +29,7 @@ public final class TestNew {
         fun();
         custom();
         roblox();
+        presence();
         System.out.println();
         System.out.println("new: " + passed + " passed, " + failed + " failed");
         if (failed > 0) {
@@ -388,6 +389,53 @@ public final class TestNew {
         rest = new DiscordRest("t");
         Commands.handle(rest, interaction("roblox", "G", "C", 0));
         check("roblox usage", contains(content(rest), "/roblox user"), content(rest));
+    }
+
+    private static void presence() throws Exception {
+        BotPresence.set(BotPresence.PLAYING, "", "online");
+        JSONObject payload = BotPresence.gatewayPayload();
+        check("presence op is 3", payload.optInt("op") == 3, "op=" + payload.optInt("op"));
+        check("presence clears activity when empty",
+                payload.getJSONObject("d").getJSONArray("activities").length() == 0, "has activity");
+        check("presence default status", "online".equals(payload.getJSONObject("d").optString("status")),
+                payload.getJSONObject("d").optString("status"));
+
+        BotPresence.set(BotPresence.WATCHING, "the logs", "idle");
+        payload = BotPresence.gatewayPayload();
+        JSONObject activity = payload.getJSONObject("d").getJSONArray("activities").getJSONObject(0);
+        check("presence watching text", "the logs".equals(activity.optString("name")), activity.toString());
+        check("presence watching type", activity.optInt("type") == 3, "type=" + activity.optInt("type"));
+        check("presence idle status", "idle".equals(payload.getJSONObject("d").optString("status")),
+                payload.getJSONObject("d").optString("status"));
+        check("presence describe", BotPresence.describe().contains("Watching"), BotPresence.describe());
+
+        BotPresence.set(BotPresence.CUSTOM, "building bots", "dnd");
+        payload = BotPresence.gatewayPayload();
+        activity = payload.getJSONObject("d").getJSONArray("activities").getJSONObject(0);
+        check("presence custom name", "Custom Status".equals(activity.optString("name")), activity.toString());
+        check("presence custom state", "building bots".equals(activity.optString("state")), activity.toString());
+        check("presence custom type", activity.optInt("type") == 4, "type=" + activity.optInt("type"));
+        check("presence dnd status", "dnd".equals(payload.getJSONObject("d").optString("status")),
+                payload.getJSONObject("d").optString("status"));
+
+        BotPresence.set(BotPresence.COMPETING, "the tournament", "online");
+        check("presence competing type", BotPresence.gatewayPayload().getJSONObject("d")
+                .getJSONArray("activities").getJSONObject(0).optInt("type") == 5, "wrong type");
+
+        BotPresence.set(999, "x", "bogus");
+        check("presence invalid type falls back", BotPresence.type == BotPresence.PLAYING,
+                "type=" + BotPresence.type);
+        check("presence invalid status falls back", "online".equals(BotPresence.status), BotPresence.status);
+
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < 200; i++) {
+            builder.append('x');
+        }
+        BotPresence.set(BotPresence.PLAYING, builder.toString(), "online");
+        check("presence text clamped", BotPresence.text.length() == BotPresence.MAX_TEXT,
+                "len=" + BotPresence.text.length());
+
+        BotPresence.set(BotPresence.PLAYING, "", "online");
     }
 
     private static JSONObject interaction(String name, String guild, String channel, long permissions,

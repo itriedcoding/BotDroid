@@ -17,6 +17,10 @@
     <string name="custom_empty">None yet. In Discord run /custom add name response.</string>
     <string name="custom_count">%1$d saved</string>
     <string name="clear_custom">Clear custom commands</string>
+    <string name="presence_title">Bot status</string>
+    <string name="presence_desc">Choose what Discord shows under the bot name, and whether it appears online, idle, do not disturb or invisible.</string>
+    <string name="presence_hint">Status text (max 128 characters)</string>
+    <string name="presence_save">Save status</string>
     <string name="bot_section">Bot</string>
     <string name="refresh_commands">Re-register commands in Discord</string>
     <string name="forget_token">Forget token and stop</string>

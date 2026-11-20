@@ -9,6 +9,9 @@ final class Prefs {
     private static final String KEY_TOKEN = "token";
     private static final String KEY_ROBLOX = "roblox_enabled";
     private static final String KEY_CUSTOM = "custom_commands";
+    private static final String KEY_PRESENCE_TYPE = "presence_type";
+    private static final String KEY_PRESENCE_TEXT = "presence_text";
+    private static final String KEY_PRESENCE_STATUS = "presence_status";
 
     private Prefs() {
     }
@@ -34,6 +37,23 @@ final class Prefs {
                 .edit()
                 .putBoolean(KEY_ROBLOX, enabled)
                 .apply();
+    }
+
+    static void savePresence(Context context, int type, String text, String status) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+                .edit()
+                .putInt(KEY_PRESENCE_TYPE, type)
+                .putString(KEY_PRESENCE_TEXT, text)
+                .putString(KEY_PRESENCE_STATUS, status)
+                .apply();
+    }
+
+    static void loadPresence(Context context) {
+        android.content.SharedPreferences prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE);
+        BotPresence.set(
+                prefs.getInt(KEY_PRESENCE_TYPE, BotPresence.PLAYING),
+                prefs.getString(KEY_PRESENCE_TEXT, ""),
+                prefs.getString(KEY_PRESENCE_STATUS, "online"));
     }
 
     static String customCommands(Context context) {

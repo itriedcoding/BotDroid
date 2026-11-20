@@ -44,6 +44,7 @@ final class DiscordBot {
     private volatile long lastAck = 0L;
     private volatile int sequence = -1;
     private volatile String applicationId;
+    private volatile boolean identified = false;
     private final Set<String> knownGuilds = ConcurrentHashMap.newKeySet();
 
     DiscordBot(String token, Listener listener) {
@@ -97,6 +98,7 @@ final class DiscordBot {
         while (running && !fatal) {
             GatewaySocket current = null;
             try {
+                identified = false;
                 status("Connecting…");
                 log("Connecting to Discord gateway…");
                 current = new GatewaySocket(GATEWAY_HOST, GATEWAY_PATH);
@@ -271,8 +273,24 @@ final class DiscordBot {
         }
         BotState.guildCount = knownGuilds.size();
         log("Connected to " + ids.size() + " server(s)");
+        identified = true;
+        updatePresence();
         for (final String id : ids) {
             registerCommands(id);
+        }
+    }
+
+    /** Pushes the configured activity/status to Discord (op 3). */
+    void updatePresence() {
+        GatewaySocket current = socket;
+        if (!identified || current == null) {
+            return;
+        }
+        try {
+            current.send(BotPresence.gatewayPayload().toString());
+            log("Bot status set: " + BotPresence.describe());
+        } catch (Exception e) {
+            log("Could not update bot status: " + e.getMessage());
         }
     }
 

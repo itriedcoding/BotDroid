@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="presence_types">
+        <item>Playing</item>
+        <item>Listening to</item>
+        <item>Watching</item>
+        <item>Competing in</item>
+        <item>Custom status</item>
+    </string-array>
+
+    <string-array name="presence_statuses">
+        <item>Online</item>
+        <item>Idle</item>
+        <item>Do Not Disturb</item>
+        <item>Invisible</item>
+    </string-array>
+</resources>

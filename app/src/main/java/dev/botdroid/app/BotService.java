@@ -50,6 +50,13 @@ public class BotService extends Service {
         context.startService(new Intent(context, BotService.class).setAction(ACTION_STOP));
     }
 
+    static void applyPresence(Context context) {
+        DiscordBot bot = current;
+        if (bot != null) {
+            bot.updatePresence();
+        }
+    }
+
     static void refreshCommands(Context context) {
         DiscordBot bot = current;
         if (bot != null) {
@@ -69,6 +76,7 @@ public class BotService extends Service {
         super.onCreate();
         createChannel();
         BotState.robloxEnabled = Prefs.robloxEnabled(this);
+        Prefs.loadPresence(this);
         CustomCommands.load(Prefs.customCommands(this));
         CustomCommands.setSaver(json -> Prefs.customCommands(getApplicationContext(), json));
         CustomCommands.setOnChange(() -> {

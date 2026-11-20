@@ -45,6 +45,7 @@ final class CommandsUtil {
         if (BotState.startedAt > 0) {
             description.append("**Running for:** <t:").append(BotState.startedAt / 1000).append(":R>\n");
         }
+        description.append("**Status:** ").append(BotPresence.describe()).append("\n");
         description.append("**Engine:** raw gateway WebSocket, no third-party libraries");
         Commands.respond(rest, interaction, "", true,
                 new JSONArray().put(Commands.embed("BotDroid " + BotState.VERSION, 0x5865F2, description.toString())));

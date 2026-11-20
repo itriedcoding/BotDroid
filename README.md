@@ -2,7 +2,8 @@
 
 A Discord bot that runs **on your phone**. Paste a bot token, press Start, and
 50 preset slash commands appear in every server the bot is in — plus Roblox
-lookups, custom commands you create yourself, and a settings screen.
+lookups, custom commands you create yourself, a configurable bot status
+(playing, watching, competing, custom text) and a settings screen.
 No server, no hosting, no third-party libraries: the APK is around 70 KB.
 
 ## What it does
@@ -13,7 +14,9 @@ No server, no hosting, no third-party libraries: the APK is around 70 KB.
 - **Roblox lookups** through the public Roblox API: users, avatars, games, groups.
 - **Custom commands**: create your own with `/custom add name response` and
   invoke them like `/hello`.
-- **Settings screen**: toggle Roblox commands, review and clear custom commands,
+- **Bot status**: show the bot as playing, listening, watching, competing or
+  with a custom status, and choose online / idle / do not disturb / invisible.
+- **Settings screen**: bot status, Roblox toggle, custom command management,
   re-register commands, forget the token.
 - Live activity log and status inside the app.
 
@@ -134,6 +137,11 @@ show them).
 
 The **Settings** button on the main screen opens:
 
+- **Bot status** — activity type (Playing, Listening to, Watching, Competing in,
+  Custom status), the text shown (up to 128 characters) and the presence
+  (Online, Idle, Do Not Disturb, Invisible). **Save status** applies it to the
+  running bot immediately through a gateway presence update; leaving the text
+  empty shows no activity. `/botinfo` also reports the active status.
 - **Roblox integration** — turn `/roblox` on or off.
 - **Custom commands** — count, list, and clear all of them.
 - **Re-register commands in Discord** — useful if Discord is showing a stale list.
@@ -176,14 +184,17 @@ handler payloads can be checked without a token:
 
 It covers all handlers (permission gates, REST paths, request bodies, embeds),
 the 50 command definitions and their subcommands, the maths parser, the custom
-command store and the Roblox toggle. `tools/` is not compiled into the APK.
+command store, the Roblox toggle and every presence payload shape (playing,
+listening, watching, competing, custom status, empty activity, invalid values).
+`tools/` is not compiled into the APK.
 
 ## How it works
 
 ```
 app/src/main/java/dev/botdroid/app/
   MainActivity.java     token entry, start/stop, live log
-  SettingsActivity.java Roblox toggle, custom commands, token reset
+  SettingsActivity.java bot status, Roblox toggle, custom commands, token reset
+  BotPresence.java      activity/status model and gateway presence payload
   BotService.java       foreground service, notification, wake lock
   DiscordBot.java       gateway loop, heartbeats, command registration
   Commands.java         50 command definitions, dispatch, core handlers
