@@ -4,8 +4,10 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public final class TestNew {
@@ -32,6 +34,10 @@ public final class TestNew {
         presence();
         commandsPlus();
         commandsExtra();
+        deviceStatus();
+        commandsBatch3();
+        scripts();
+        customScripts();
         toggles();
         System.out.println();
         System.out.println("new: " + passed + " passed, " + failed + " failed");
@@ -42,7 +48,7 @@ public final class TestNew {
 
     private static void definitions() throws Exception {
         JSONArray defs = Commands.definitions();
-        check("100 preset commands", defs.length() == 100, "count=" + defs.length());
+        check("registration stops at 100", defs.length() == 100, "count=" + defs.length());
         StringBuilder problems = new StringBuilder();
         Set<String> names = new HashSet<>();
         for (int i = 0; i < defs.length(); i++) {
@@ -69,8 +75,8 @@ public final class TestNew {
         check("definitions valid", problems.length() == 0, problems.toString());
         check("roblox subcommands", subNames(defs, "roblox").toString()
                 .equals("[user, avatar, game, group, games]"), subNames(defs, "roblox").toString());
-        check("custom subcommands", subNames(defs, "custom").toString().equals("[add, remove, list, clear]"),
-                subNames(defs, "custom").toString());
+        check("custom subcommands", subNames(defs, "custom").toString()
+                .equals("[add, remove, list, functions, clear]"), subNames(defs, "custom").toString());
     }
 
     private static void validateOptions(JSONArray options, String command, StringBuilder problems) throws Exception {
@@ -396,8 +402,11 @@ public final class TestNew {
         CustomCommands.load("[]");
         CommandToggles.loadDefaults();
         int defaultLimit = 100 - CommandToggles.enabledCount();
-        check("defaults leave room for custom commands", defaultLimit == CommandToggles.DEFAULT_OFF.size(),
-                "free=" + defaultLimit);
+        check("defaults keep 91 built-ins on", CommandToggles.enabledCount() == 91,
+                "enabled=" + CommandToggles.enabledCount());
+        check("defaults leave nine custom slots", defaultLimit == 9, "free=" + defaultLimit);
+        check("every default-off name is a real command", everyDefaultOffExists(),
+                CommandToggles.DEFAULT_OFF.toString());
         check("default-off commands are off", !CommandToggles.isEnabled("dm")
                 && CommandToggles.isEnabled("ban"), "unexpected defaults");
         check("toggling works", CommandToggles.setEnabled("ping", false)
@@ -1026,6 +1035,365 @@ public final class TestNew {
 
     private static boolean contains(String haystack, String needle) {
         return haystack != null && haystack.contains(needle);
+    }
+
+    private static boolean everyDefaultOffExists() {
+        List<String> presets = Commands.presetNames();
+        for (String name : CommandToggles.DEFAULT_OFF) {
+            if (!presets.contains(name)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void deviceStatus() throws Exception {
+        CommandToggles.load("[]");
+        CustomCommands.load("[]");
+        DiscordRest rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/gateway".equals(p)
+                ? new Net.Resp(200, "{\"url\":\"wss://gateway.discord.gg\"}") : null;
+        Commands.handle(rest, interaction("status", "G", "C", 0));
+        String description = embedDescription(rest);
+        check("status is an embed", description != null, "no embed");
+        check("status names the phone", contains(description, "Test Corp Pixel 7"), description);
+        check("status shows the android build", contains(description, "14 (API 34)"), description);
+        check("status shows the battery", contains(description, "82%") && contains(description, "charging (USB)"),
+                description);
+        check("status shows the network", contains(description, "Wi-Fi"), description);
+        check("status shows memory and storage", contains(description, "RAM:")
+                && contains(description, "Storage:"), description);
+        check("status shows the bot", contains(description, "BotDroid:** " + BotState.VERSION)
+                && contains(description, "API latency") && contains(description, "slots free"), description);
+        check("status title is the device", contains(embedTitle(rest), "Running on Test Corp Pixel 7"),
+                embedTitle(rest));
+    }
+
+    private static void commandsBatch3() throws Exception {
+        CommandToggles.load("[]");
+        CustomCommands.load("[]");
+        Warnings.load("");
+
+        DiscordRest rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> {
+            if ("GET".equals(m) && p.startsWith("/guilds/G?with_counts")) {
+                return new Net.Resp(200, "{\"name\":\"Guild\",\"approximate_member_count\":120,"
+                        + "\"approximate_presence_count\":30,\"premium_tier\":2,"
+                        + "\"premium_subscription_count\":7,\"verification_level\":2,"
+                        + "\"explicit_content_filter\":1,\"mfa_level\":1,"
+                        + "\"roles\":[{\"id\":\"1\"}],\"emojis\":[{\"id\":\"2\"}],"
+                        + "\"features\":[\"COMMUNITY\"]}");
+            }
+            if ("GET".equals(m) && "/guilds/G/channels".equals(p)) {
+                return new Net.Resp(200, "[{\"id\":\"1\",\"name\":\"general\",\"type\":0},"
+                        + "{\"id\":\"2\",\"name\":\"voice\",\"type\":2},"
+                        + "{\"id\":\"3\",\"name\":\"Info\",\"type\":4}]");
+            }
+            return null;
+        };
+        Commands.handle(rest, interaction("serverstats", "G", "C", 0));
+        check("serverstats counts members", contains(embedDescription(rest), "Members:** 120")
+                && contains(embedDescription(rest), "30 online"), embedDescription(rest));
+        check("serverstats counts channels", contains(embedDescription(rest), "1 text"), embedDescription(rest));
+        check("serverstats shows boosts", contains(embedDescription(rest), "boosts: 7"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G/channels".equals(p)
+                ? new Net.Resp(200, "[{\"id\":\"1\",\"name\":\"general\",\"type\":0},"
+                + "{\"id\":\"2\",\"name\":\"Voice\",\"type\":2}]") : null;
+        Commands.handle(rest, interaction("channels", "G", "C", 0));
+        check("channels lists text and voice", contains(embedDescription(rest), "#general")
+                && contains(embedDescription(rest), "\uD83D\uDD0A Voice"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> {
+            if ("GET".equals(m) && "/channels/C".equals(p)) {
+                return new Net.Resp(200, "{\"name\":\"general\",\"permission_overwrites\":["
+                        + "{\"id\":\"77\",\"type\":0,\"allow\":\"2048\",\"deny\":\"0\"}]}");
+            }
+            if ("GET".equals(m) && "/guilds/G/roles".equals(p)) {
+                return new Net.Resp(200, "[{\"id\":\"77\",\"name\":\"Helper\"}]");
+            }
+            return null;
+        };
+        Commands.handle(rest, interaction("channelperms", "G", "C", 0));
+        check("channelperms resolves role names", contains(embedDescription(rest), "@Helper")
+                && contains(embedDescription(rest), "Send Messages"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && p.startsWith("/guilds/G/audit-logs")
+                ? new Net.Resp(200, "{\"audit_log_entries\":[{\"id\":\"123456789012345678\","
+                + "\"action_type\":22,\"user_id\":\"55\",\"target_id\":\"66\",\"reason\":\"spam\"}]}") : null;
+        Commands.handle(rest, interaction("auditlog", "G", "C", Commands.VIEW_AUDIT_LOG));
+        check("auditlog shows the action", contains(embedDescription(rest), "Member banned")
+                && contains(embedDescription(rest), "spam"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("auditlog", "G", "C", 0));
+        check("auditlog needs View Audit Log", contains(content(rest), "View Audit Log"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "POST".equals(m) && "/channels/C/threads".equals(p)
+                ? new Net.Resp(201, "{\"id\":\"999\",\"name\":\"help\"}") : null;
+        Commands.handle(rest, interaction("thread", "G", "C", 0, stringOption("name", "help")));
+        check("thread is created", contains(content(rest), "<#999>"), content(rest));
+        boolean archiveWindow = false;
+        for (DiscordRest.Call call : rest.calls) {
+            if ("/channels/C/threads".equals(call.path) && call.body != null
+                    && call.body.contains("auto_archive_duration")) {
+                archiveWindow = true;
+            }
+        }
+        check("thread sends the archive window", archiveWindow, "no body");
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, wrap(subcommand("warn", "add", "user", "55", "reason", "spam"),
+                "G", "C", Commands.MODERATE_MEMBERS));
+        check("warn stores a warning", contains(content(rest), "now have **1**"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("warnings", "G", "C", 0, userOption("user", "55", "bob")));
+        check("warnings lists it", contains(embedDescription(rest), "spam"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, wrap(subcommand("warn", "clear", "user", "55"), "G", "C",
+                Commands.MODERATE_MEMBERS));
+        check("warn clear removes it", contains(content(rest), "Deleted **1**"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, wrap(subcommand("warn", "add", "user", "55", "reason", "x"), "G", "C", 0));
+        check("warn needs Moderate Members", contains(content(rest), "Moderate Members"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G/invites".equals(p)
+                ? new Net.Resp(200, "[{\"code\":\"low\",\"uses\":1},{\"code\":\"top\",\"uses\":9,"
+                + "\"inviter\":{\"username\":\"bob\"}}]") : null;
+        Commands.handle(rest, interaction("topinvites", "G", "C", Commands.MANAGE_GUILD));
+        check("topinvites ranks by uses", embedDescription(rest) != null
+                && embedDescription(rest).indexOf("`top`") < embedDescription(rest).indexOf("`low`"),
+                embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("mock", "G", "C", 0, stringOption("text", "hello")));
+        check("mock alternates case", "hElLo".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("rot13", "G", "C", 0, stringOption("text", "Hello")));
+        check("rot13 rotates", "Uryyb".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("caesar", "G", "C", 0, stringOption("text", "abc"),
+                intOption("shift", 2)));
+        check("caesar shifts", contains(content(rest), "cde"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("sortlines", "G", "C", 0, stringOption("text", "b\na\nc")));
+        check("sortlines sorts", contains(content(rest), "a\nb\nc"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("dedupe", "G", "C", 0, stringOption("text", "a\na\nb")));
+        check("dedupe removes repeats", "```\na\nb\n```".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("hex", "G", "C", 0, stringOption("mode", "encode"),
+                stringOption("text", "AB")));
+        check("hex encodes", "```\n4142\n```".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("hex", "G", "C", 0, stringOption("mode", "decode"),
+                stringOption("text", "4142")));
+        check("hex decodes", "```\nAB\n```".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("charinfo", "G", "C", 0, stringOption("text", "A")));
+        check("charinfo shows the code point", contains(embedDescription(rest), "U+0041"),
+                embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("repeat", "G", "C", 0, stringOption("text", "ha"),
+                intOption("count", 3)));
+        check("repeat repeats", "ha\nha\nha".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "POST".equals(m) && "/channels/C/messages".equals(p)
+                ? new Net.Resp(200, "{\"id\":\"1\"}") : null;
+        Commands.handle(rest, interaction("embed", "G", "C", Commands.MANAGE_MESSAGES,
+                stringOption("title", "Hi"), stringOption("description", "Body"),
+                stringOption("color", "#ff0000")));
+        check("embed posts an embed", contains(content(rest), "Embed posted"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("weekday", "G", "C", 0, stringOption("date", "2030-01-01")));
+        check("weekday names the day", contains(embedDescription(rest), "Tuesday"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("percentage", "G", "C", 0, numberOption("part", 25),
+                numberOption("total", 200)));
+        check("percentage works", contains(content(rest), "12.50%"), content(rest));
+
+        Warnings.load("");
+    }
+
+    private static void scripts() throws Exception {
+        TestHost host = new TestHost("yes", "world");
+        Script.Result result = Script.run("Hi $mention, welcome to $servername!", host);
+        check("script fills context", "Hi <@100>, welcome to Sample!".equals(result.output), result.output);
+        check("script reports no error", !result.failed(), String.valueOf(result.error));
+
+        host = new TestHost("yes", "world");
+        result = Script.run("$upper[$arg[2]]/$argCount", host);
+        check("script reads arguments", "WORLD/2".equals(result.output), result.output);
+
+        host = new TestHost("yes");
+        result = Script.run("$if[$arg[1] == yes]{Yay}$else{Nope}", host);
+        check("script if branch", "Yay".equals(result.output), result.output);
+
+        host = new TestHost("no");
+        result = Script.run("$if[$arg[1] == yes]{Yay}$else{Nope}", host);
+        check("script else branch", "Nope".equals(result.output), result.output);
+
+        host = new TestHost();
+        result = Script.run("$setUserVar[points;5]score=$getUserVar[points]", host);
+        check("script stores variables", "score=5".equals(result.output), result.output);
+        check("script variables are per user", "5".equals(host.vars.get("user:100:points")),
+                String.valueOf(host.vars.keySet()));
+
+        host = new TestHost();
+        result = Script.run("$onlyPerms[manage_messages]{staff}$onlyPerms[ban_members]{hidden}", host);
+        check("script onlyPerms gates output", "staff".equals(result.output), result.output);
+
+        host = new TestHost();
+        result = Script.run("$message[pong]", host);
+        check("script queues $message", result.output.isEmpty() && result.messages.contains("pong"),
+                result.messages.toString());
+
+        host = new TestHost();
+        result = Script.run("$nosuchthing[x]", host);
+        check("unknown function is an error", result.failed() && contains(result.error, "nosuchthing"),
+                String.valueOf(result.error));
+
+        check("validate accepts a good script", Script.validate("Hi $upper[$arg[1]]") == null,
+                String.valueOf(Script.validate("Hi $upper[$arg[1]]")));
+        check("validate catches a missing bracket", Script.validate("$upper[x") != null, "accepted");
+
+        host = new TestHost();
+        result = Script.run("\\$5 costs", host);
+        check("script escapes the dollar sign", "$5 costs".equals(result.output), result.output);
+
+        host = new TestHost();
+        result = Script.run("$calc[2+3*4]", host);
+        check("script calc", "14".equals(result.output), result.output);
+    }
+
+    private static void customScripts() throws Exception {
+        CustomCommands.load("[]");
+        CommandToggles.loadDefaults();
+        check("custom script saved", CustomCommands.add("greet", "Hi $mention from $servername") == null,
+                "rejected");
+
+        DiscordRest rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && p.startsWith("/guilds/G?with_counts")
+                ? new Net.Resp(200, "{\"name\":\"Sample\"}") : null;
+        Commands.handle(rest, interaction("greet", "G", "C", 0));
+        check("custom script replies in Discord", "Hi <@100> from Sample".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && p.startsWith("/guilds/G?with_counts")
+                ? new Net.Resp(200, "{\"name\":\"Sample\"}") : null;
+        Commands.handle(rest, interaction("greet", "G", "C", 0, stringOption("input", "one two")));
+        check("custom command accepts input", "Hi <@100> from Sample".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, wrap(subcommand("custom", "functions"), "G", "C", 0));
+        check("custom functions lists the language", contains(embedDescription(rest), "$mention"),
+                embedDescription(rest));
+
+        CustomCommands.load("[]");
+        CustomCommands.remove("greet");
+    }
+
+    /** Stand-in bot for script tests: sample context plus real variable storage. */
+    private static final class TestHost implements Script.Host {
+        final Map<String, String> vars = new HashMap<>();
+        final List<String> messages = new ArrayList<>();
+        final String[] args;
+
+        TestHost(String... args) {
+            this.args = args;
+        }
+
+        @Override
+        public String var(String key) {
+            String value = vars.get(key);
+            return value == null ? "" : value;
+        }
+
+        @Override
+        public void setVar(String key, String value) {
+            vars.put(key, value);
+        }
+
+        @Override
+        public void message(String text) {
+            messages.add(text);
+        }
+
+        @Override
+        public boolean hasPermission(String permission) {
+            return "manage_messages".equals(permission);
+        }
+
+        @Override
+        public String info(String key) {
+            switch (key) {
+                case "username":
+                case "displayname":
+                    return "Alex";
+                case "userid":
+                    return "100";
+                case "mention":
+                    return "<@100>";
+                case "servername":
+                    return "Sample";
+                case "serverid":
+                    return "G";
+                case "channelname":
+                    return "general";
+                case "channelid":
+                    return "C";
+                case "commandname":
+                    return "test";
+                case "botname":
+                    return "BotDroid";
+                case "version":
+                    return BotState.VERSION;
+                case "ping":
+                    return "42";
+                case "uptime":
+                    return "1h 5m";
+                case "guilds":
+                    return "2";
+                case "membercount":
+                    return "128";
+                default:
+                    return "";
+            }
+        }
+
+        @Override
+        public String arg(int index) {
+            return index >= 1 && index <= args.length ? args[index - 1] : "";
+        }
+
+        @Override
+        public String args() {
+            return String.join(" ", args);
+        }
+
+        @Override
+        public int argCount() {
+            return args.length;
+        }
     }
 
     private static void check(String label, boolean ok, String detail) {

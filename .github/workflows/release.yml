@@ -50,7 +50,7 @@ jobs:
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: "1.5"
+          VERSION: "1.6"
         run: |
           TAG="v$VERSION"
           cat > release-notes.md <<'EOF'
@@ -58,7 +58,7 @@ jobs:
 
           Install the APK, paste your Discord bot token, press Start. The preset slash commands are registered in every server the bot is in.
 
-          100 built-in slash commands with per-command on/off switches, Roblox lookups, an in-app command builder, a rich presence page, start-on-boot, and an animated entrance.
+          120 built-in slash commands with per-command on/off switches, /status for the phone the bot runs on, a Bot Designer-style bot builder with its own script language, Roblox lookups, on-phone warnings, a rich presence page, start-on-boot, and an animated entrance.
 
           Requires Android 8.0+. Bot invite needs the bot and applications.commands scopes.
           EOF

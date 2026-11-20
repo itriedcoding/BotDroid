@@ -32,5 +32,10 @@ final class Store {
                 BotService.refreshCommands(app);
             }
         });
+        Variables.load(Prefs.variables(app));
+        Variables.setSaver(json -> Prefs.variables(app, json));
+        Warnings.load(Prefs.warnings(app));
+        Warnings.setSaver(json -> Prefs.warnings(app, json));
+        DeviceProbe.attach(app);
     }
 }

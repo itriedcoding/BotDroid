@@ -42,6 +42,13 @@
             android:parentActivityName=".SettingsActivity" />
 
         <activity
+            android:name=".BuilderActivity"
+            android:exported="false"
+            android:label="@string/builder_title"
+            android:parentActivityName=".SettingsActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".PresenceActivity"
             android:exported="false"
             android:label="@string/presence_title"

@@ -19,6 +19,7 @@ final class Commands {
     static final long BAN_MEMBERS = 1L << 2;
     static final long ADMINISTRATOR = 1L << 3;
     static final long MANAGE_CHANNELS = 1L << 4;
+    static final long VIEW_AUDIT_LOG = 1L << 7;
     static final long MANAGE_GUILD = 1L << 5;
     static final long MANAGE_WEBHOOKS = 1L << 29;
 
@@ -83,11 +84,19 @@ final class Commands {
             + "`/untimeout` `/baninfo`\n"
             + "__More fun__\n"
             + "`/fortune` `/compliment` `/hug` `/pat` `/clap` `/spoiler`\n"
+            + "__Device and server__\n"
+            + "`/status` `/serverstats` `/channels` `/channelperms` `/auditlog` `/thread` `/topinvites`\n"
+            + "__Warnings__\n"
+            + "`/warn add|list|clear` `/warnings`\n"
+            + "__Text tools 2__\n"
+            + "`/mock` `/rot13` `/caesar` `/sortlines` `/dedupe` `/hex` `/charinfo` `/repeat` `/embed` "
+            + "`/weekday` `/percentage`\n"
             + "__Roblox__\n"
             + "`/roblox user|avatar|game|group|games`\n"
-            + "__Custom__\n"
-            + "`/custom add|remove|list|clear`\n"
-            + "Build your own: `/custom add name:hello response:Hi {user}!`";
+            + "__Custom and the bot builder__\n"
+            + "`/custom add|remove|list|clear|functions`\n"
+            + "Responses can be plain text or a script: `$mention`, `$args`, `$if[...]{...}`, "
+            + "`$setUserVar[...]` and more. `/custom functions` lists them all.";
 
     private static volatile Set<String> presetNames;
 
@@ -318,6 +327,7 @@ final class Commands {
             + "{\"type\":1,\"name\":\"remove\",\"description\":\"Delete a command\",\"options\":["
             + "{\"type\":3,\"name\":\"name\",\"description\":\"Command name\",\"required\":true,\"max_length\":32}]},"
             + "{\"type\":1,\"name\":\"list\",\"description\":\"List custom commands\"},"
+            + "{\"type\":1,\"name\":\"functions\",\"description\":\"Show the script functions the bot builder supports\"},"
             + "{\"type\":1,\"name\":\"clear\",\"description\":\"Delete every custom command\"}]}"
             + "]";
 
@@ -332,7 +342,7 @@ final class Commands {
             }
         }
         try {
-            JSONArray presets = new JSONArray(DEFINITIONS);
+            JSONArray presets = presetDefinitions();
             for (int i = 0; i < presets.length() && merged.length() < MAX_COMMANDS; i++) {
                 JSONObject entry = presets.optJSONObject(i);
                 if (entry != null && CommandToggles.isEnabled(entry.optString("name", ""))) {
@@ -352,19 +362,35 @@ final class Commands {
     }
 
     static int presetCount() {
-        try {
-            return new JSONArray(DEFINITIONS).length();
-        } catch (Exception e) {
-            return 0;
-        }
+        return presetDefinitions().length();
     }
 
+    /** The built-ins from this file plus the newer ones in {@link CommandsExtra}. */
     static JSONArray presetDefinitions() {
+        JSONArray merged = new JSONArray();
         try {
-            return new JSONArray(DEFINITIONS);
-        } catch (Exception e) {
-            return new JSONArray();
+            JSONArray base = new JSONArray(DEFINITIONS);
+            for (int i = 0; i < base.length(); i++) {
+                JSONObject entry = base.optJSONObject(i);
+                if (entry != null) {
+                    merged.put(entry);
+                }
+            }
+        } catch (Exception ignored) {
+            // skip the broken half rather than losing everything
         }
+        try {
+            JSONArray extra = new JSONArray(CommandsExtra.DEFINITIONS);
+            for (int i = 0; i < extra.length(); i++) {
+                JSONObject entry = extra.optJSONObject(i);
+                if (entry != null) {
+                    merged.put(entry);
+                }
+            }
+        } catch (Exception ignored) {
+            // skip
+        }
+        return merged;
     }
 
     static List<String> presetNames() {
@@ -384,7 +410,7 @@ final class Commands {
         if (names == null) {
             names = new HashSet<>();
             try {
-                JSONArray array = new JSONArray(DEFINITIONS);
+                JSONArray array = presetDefinitions();
                 for (int i = 0; i < array.length(); i++) {
                     JSONObject command = array.optJSONObject(i);
                     if (command != null) {
@@ -610,10 +636,50 @@ final class Commands {
                 CommandsRoblox.handle(rest, interaction);
             } else if ("custom".equals(name)) {
                 CommandsCustom.handle(rest, interaction);
+            } else if ("status".equals(name)) {
+                CommandsExtra.status(rest, interaction);
+            } else if ("serverstats".equals(name)) {
+                CommandsExtra.serverStats(rest, interaction);
+            } else if ("channels".equals(name)) {
+                CommandsExtra.channels(rest, interaction);
+            } else if ("channelperms".equals(name)) {
+                CommandsExtra.channelPerms(rest, interaction);
+            } else if ("auditlog".equals(name)) {
+                CommandsExtra.auditLog(rest, interaction);
+            } else if ("thread".equals(name)) {
+                CommandsExtra.thread(rest, interaction);
+            } else if ("warn".equals(name)) {
+                CommandsExtra.warn(rest, interaction);
+            } else if ("warnings".equals(name)) {
+                CommandsExtra.warnings(rest, interaction);
+            } else if ("topinvites".equals(name)) {
+                CommandsExtra.topInvites(rest, interaction);
+            } else if ("mock".equals(name)) {
+                CommandsExtra.mock(rest, interaction);
+            } else if ("rot13".equals(name)) {
+                CommandsExtra.rot13(rest, interaction);
+            } else if ("caesar".equals(name)) {
+                CommandsExtra.caesar(rest, interaction);
+            } else if ("sortlines".equals(name)) {
+                CommandsExtra.sortLines(rest, interaction);
+            } else if ("dedupe".equals(name)) {
+                CommandsExtra.dedupe(rest, interaction);
+            } else if ("hex".equals(name)) {
+                CommandsExtra.hex(rest, interaction);
+            } else if ("charinfo".equals(name)) {
+                CommandsExtra.charInfo(rest, interaction);
+            } else if ("repeat".equals(name)) {
+                CommandsExtra.repeat(rest, interaction);
+            } else if ("embed".equals(name)) {
+                CommandsExtra.embed(rest, interaction);
+            } else if ("weekday".equals(name)) {
+                CommandsExtra.weekday(rest, interaction);
+            } else if ("percentage".equals(name)) {
+                CommandsExtra.percentage(rest, interaction);
             } else {
                 String custom = CustomCommands.response(name);
                 if (custom != null) {
-                    respond(rest, interaction, CommandsCustom.render(custom, interaction), false, null);
+                    CommandsCustom.run(rest, interaction, name, custom);
                 } else {
                     respond(rest, interaction, "Unknown command `/" + name + "`. Try `/help`.", true, null);
                 }
@@ -630,7 +696,9 @@ final class Commands {
     // ------------------------------------------------------------------- core
 
     private static void help(DiscordRest rest, JSONObject interaction) throws Exception {
-        respond(rest, interaction, HELP, true, null);
+        // An embed holds 4096 characters, so the whole list always fits in one reply.
+        respond(rest, interaction, "", true,
+                new JSONArray().put(embed("BotDroid " + BotState.VERSION + " — commands", 0x5865F2, HELP)));
     }
 
     private static void ping(DiscordRest rest, JSONObject interaction) throws Exception {

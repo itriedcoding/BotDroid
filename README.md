@@ -1,22 +1,28 @@
 # BotDroid
 
 A Discord bot that runs **on your phone**. Paste a bot token, press Start, and
-100 built-in slash commands appear in every server the bot is in (90 on by
-default, the rest one switch away) — plus Roblox lookups, a command builder
-inside the app, a rich presence page and a settings screen.
-No server, no hosting, no third-party libraries: the APK is around 100 KB.
+120 built-in slash commands are ready for every server the bot is in (91 on by
+default, the other 29 one switch away) — plus Roblox lookups, a Bot
+Designer–style **bot builder** with its own script language, `/status` for the
+phone the bot runs on, a rich presence page and a settings screen.
+No server, no hosting, no third-party libraries: the APK stays tiny.
 
 ## What it does
 
 - Connects to the Discord gateway and stays online inside a foreground service.
 - Registers up to 100 slash commands in every server the bot joins, and
   re-registers automatically when you add a custom command or flip a switch.
+- **`/status`**: the phone the bot is running on — model, Android version,
+  battery, network, RAM, storage, uptime — plus latency, server count and command
+  slots. Everything is measured on the device, nothing is faked.
+- **Robot builder**: a full builder page (name, script editor, function palette,
+  test run, saved list) with a BDScript-style language: `$mention`, `$args`,
+  `$upper[x]`, `$if[...]{...}`, `$setUserVar[name;value]` and about 60 more
+  functions. `/custom functions` documents them in Discord too.
 - **Roblox lookups** through the public Roblox API: users, avatars, games, groups.
-- **Command builder**: type a name and a response in Settings, press **Add
-  command**, and `/name` exists in every server. Remove commands from the same
-  list. `/custom add name response` in Discord still works too.
 - **Per-command switches**: Settings → Commands lists every built-in with a
   toggle. Off commands are not registered and free a slot for a custom command.
+- **Warnings** kept on the phone: `/warn add|list|clear` and `/warnings`.
 - **Rich presence page**: activity type (including Streaming with a URL), main
   line, second line and online/idle/DND/invisible, applied live.
 - **Start on boot**: the bot comes back by itself after a phone restart.
@@ -147,6 +153,40 @@ BotDroid needs only the `GUILDS` intent, so no privileged intents are required.
 | `/morse` | Text ↔ morse code |
 | `/convert` | Length, mass and temperature units |
 
+### Device and server
+| Command | What it does |
+| --- | --- |
+| `/status` | Where the bot runs: phone model, Android build, battery, network, RAM, storage, uptime, latency, servers and free command slots |
+| `/serverstats` | Members, online, roles, emojis, stickers, boosts, verification, channels |
+| `/channels` | Every channel grouped by text, voice, categories and other |
+| `/channelperms` | Permission overwrites in this channel, resolved to role names |
+| `/auditlog` | Recent audit log entries, with the moderator and reason |
+| `/thread` | Start a public thread in this channel |
+| `/topinvites` | Invites ranked by how many people joined through them |
+
+### Warnings
+| Command | What it does | Permission |
+| --- | --- | --- |
+| `/warn add` | Warn a member with a reason | Moderate Members |
+| `/warn list` `/warn clear` | Show or delete a member's warnings | Moderate Members |
+| `/warnings` | Check your own (or someone's) warnings | — |
+
+Warnings live on the phone, in the app's private storage, up to 2000 entries —
+the bot has no database server of its own, and the command says so.
+
+### Text tools 2
+| Command | What it does |
+| --- | --- |
+| `/mock` | sPoNgEbOb case |
+| `/rot13` `/caesar` | Letter rotation by 13 or any shift |
+| `/sortlines` `/dedupe` | Sort lines, or drop duplicates |
+| `/hex` | Text ↔ hex |
+| `/charinfo` | Code point, decimal, category and UTF-8 size per character |
+| `/repeat` | Repeat text up to 10 times |
+| `/embed` | Post a custom embed with a title, body and colour |
+| `/weekday` | Which day of the week a date falls on |
+| `/percentage` | Part ÷ total as a percentage |
+
 Every moderation command checks the invoker's permissions first and explains
 Discord's refusal (403 role hierarchy, missing permission, unknown user).
 
@@ -186,6 +226,7 @@ web URL parameters. Roblox lookups can be switched off in Settings.
 | `/custom add <name> <response>` | Create or overwrite a command |
 | `/custom remove <name>` | Delete one |
 | `/custom list` | Show all of them |
+| `/custom functions` | Every bot builder function, in Discord |
 | `/custom clear` | Delete every custom command |
 
 Example: `/custom add name:hello response:Hi {user}, welcome to {channel}!`
@@ -194,21 +235,55 @@ up to 32 characters; built-in names are reserved; responses are capped at 1500
 characters. They are stored on the phone and re-registered in every server
 automatically (Discord can take a few seconds to show them).
 
-The same commands can be built without leaving the app: **Settings → Custom
-commands** has a name field, a response field and **Add command**, and every
-saved command has a **Remove** button.
+Every custom command takes one optional `input` option, which is what `$args`
+and `$arg[n]` read: `/hello input:good morning`.
+
+## Bot builder
+
+**Settings → Bot builder** is the app's answer to Bot Designer for Discord's
+command creator: a name field, a monospace script editor, a row of function
+buttons that insert snippets at the cursor, a **Test run** button and the list of
+saved commands with **Edit** and **Remove**.
+
+The response of a custom command is a script. Plain text works as before; a
+`$` starts a function call, arguments are separated by `;`, and calls can be
+nested:
+
+```
+Hi $mention, welcome to $servername!
+You are level $getUserVar[level] with $argCount argument(s): $args
+$if[$arg[1] == yes]{Nice.}$else{Try again with yes.}
+```
+
+| Group | Functions |
+| --- | --- |
+| Text | `$nomention` `$message[text]` `$upper[x]` `$lower[x]` `$capitalize[x]` `$trim[x]` `$reverse[x]` `$length[x]` `$replace[x;from;to]` `$substring[x;start;end]` `$split[x;sep;index]` `$contains[x;y]` `$startsWith[x;y]` `$endsWith[x;y]` `$repeat[x;times]` |
+| Numbers | `$calc[expr]` `$sum[a;b]` `$mod[a;b]` `$round[x]` `$floor[x]` `$ceil[x]` `$abs[x]` `$max[a;b]` `$min[a;b]` `$random[min;max]` `$choose[a;b;c]` |
+| Context | `$username` `$displayname` `$userid` `$mention` `$args` `$argCount` `$arg[n]` `$argsFrom[n]` `$servername` `$serverid` `$channelname` `$channelid` `$commandname` `$botname` `$version` `$ping` `$uptime` `$guilds` `$membercount` `$date` `$time` `$timestamp` `$weekday[date]` |
+| Variables | `$getVar[name]` `$setVar[name;value]` (global) · `$getUserVar` / `$setUserVar` (per member) · `$getServerVar` / `$setServerVar` (per server) |
+| Logic | `$if[condition]{yes}$else{no}` with `==`, `!=`, `>`, `<`, `>=`, `<=` · `$onlyIf[condition]{...}` · `$onlyPerms[manage_messages]{...}` · `$not[x]` `$equals[x;y]` |
+
+Escape `$`, `;`, `{`, `}` and `[` with a backslash: `\$5` prints `$5`.
+Variables persist on the phone (500 max per install, 900 characters each) and
+are cleared from the builder page. `$onlyPerms` checks the caller's real
+permissions in the server, so a script can keep a reply for staff.
+
+The builder's **Test run** executes the same interpreter on the device with
+sample values — it is a preview of the real evaluation, not a separate mock
+mode, and it never posts anything to Discord.
 
 ### How the 100 command slots are shared
 
-Discord allows **100 commands per server**, counting built-ins and your own
-together, so the custom limit is `100 − enabled built-ins` rather than a fixed
-number. Ten niche built-ins (`/dm`, `/announce`, `/webhooks`, `/invites`,
-`/stickers`, `/events`, `/threads`, `/emojiinfo`, `/serverbanner`,
-`/memberroles`) start off, which leaves room for ten custom commands on a fresh
-install. Turn built-ins off in **Settings → Commands** to free more, or on if
-you need them. `/commandcount` shows the current split, and if a server ever
-exceeds 100 the app keeps your custom commands and logs which built-ins were
-skipped.
+BotDroid ships **120 built-in commands**, but Discord allows **100 per server**,
+counting built-ins and your own together, so the custom limit is
+`100 − enabled built-ins` rather than a fixed number. **91** are on by default;
+the other **29** are niche or specialised (`/dm`, `/announce`, `/auditlog`,
+`/warn`, `/mock`, `/hex`, …) and start switched off, which leaves room for nine
+custom commands on a fresh install. Turn built-ins off in **Settings → Commands**
+to free more, or on if you need them — that page lists every command with a
+switch plus **Turn all on** / **Turn all off**. `/commandcount` shows the current
+split, and if a server ever exceeds 100 the app keeps your custom commands and
+logs which built-ins were skipped.
 
 ## Settings
 
@@ -216,6 +291,9 @@ The **Settings** button on the main screen opens:
 
 - **Commands** — every built-in command with an on/off switch, plus **Turn all
   on** / **Turn all off** and a live count of free slots.
+- **Bot builder** — the script editor, function palette, test run, saved
+  commands with **Edit** / **Remove**, the variable store and the full function
+  reference.
 - **Rich presence** — its own page: activity type (Playing, Streaming,
   Listening to, Watching, Competing in, Custom status), the main line, an
   optional second line, a stream URL for Streaming, and the presence (Online,
@@ -223,8 +301,9 @@ The **Settings** button on the main screen opens:
   immediately through a gateway presence update; leaving the text empty shows no
   activity. `/botinfo` also reports the active status.
 - **Roblox integration** — turn `/roblox` on or off.
-- **Custom commands** — the command builder (name + response + **Add command**),
-  the saved list with per-command **Remove**, and **Clear custom commands**.
+- **Custom commands** — a quick-add field (name + response + **Add command**),
+  the saved list with per-command **Remove**, and **Clear custom commands**. For
+  scripts use the **Bot builder** button in the same card.
 - **Start on boot** — restart the bot by itself when the phone reboots
   (Android 8–14; newer Android versions restrict foreground services started at
   boot).
@@ -294,11 +373,13 @@ handler payloads can be checked without a token:
 ```
 
 It covers all handlers (permission gates, REST paths, request bodies, embeds),
-the 100 command definitions and their subcommands, the maths parser, the custom
+the 120 command definitions and their subcommands, the maths parser, the custom
 command store, the command-slot arithmetic (defaults, toggles, the 100 cap),
-the Roblox toggle and every presence payload shape (playing, streaming with and
+the Roblox toggle, every presence payload shape (playing, streaming with and
 without a URL, listening, watching, competing, custom status, state lines,
-empty activity, invalid values). 181 checks in total.
+empty activity, invalid values), `/status` with a canned device, the warnings
+store and the script language (nesting, arguments, `$if`/`$else`, variables,
+`$onlyPerms`, escapes, error reporting). 235 checks in total.
 `tools/` is not compiled into the APK.
 
 ## How it works
@@ -306,9 +387,15 @@ empty activity, invalid values). 181 checks in total.
 ```
 app/src/main/java/dev/botdroid/app/
   MainActivity.java     token entry, start/stop, live log, entrance animation
-  SettingsActivity.java command builder, toggles entry, autostart, token reset
+  SettingsActivity.java settings, toggles entry, autostart, token reset
   CommandsActivity.java per-command on/off switches
+  BuilderActivity.java  bot builder: editor, palette, test run, saved scripts
   PresenceActivity.java rich presence page
+  Script.java           the $function script language (parser and evaluator)
+  Variables.java        global / per-user / per-server script variables
+  Warnings.java         warnings issued with /warn, stored on the phone
+  DeviceInfo.java       device snapshot model and formatting for /status
+  DeviceProbe.java      reads Build, battery, network, memory and storage
   BootReceiver.java     restarts the bot after a reboot
   Store.java            loads prefs into memory, persists toggles and commands
   CommandToggles.java   which built-ins are enabled and the slot arithmetic
@@ -320,6 +407,7 @@ app/src/main/java/dev/botdroid/app/
   CommandsInfo.java     info, text and invite commands
   CommandsAdmin.java    role, channel and voice commands
   CommandsMore.java     server tools, invites, converters
+  CommandsExtra.java    /status, server inspection, warnings, text tools
   CommandsMod.java      extra moderation commands
   CommandsFun.java      fun commands
   CommandsFun2.java     social and text fun commands

@@ -40,7 +40,24 @@ public final class TestCore {
         JSONObject data = reply(rest);
         check("help replies", data != null, "no reply");
         check("help is ephemeral", data != null && data.optInt("flags") == 64, "flags wrong");
-        check("help lists ban", contains(content(rest), "/ban"), String.valueOf(content(rest)));
+        check("help lists ban", contains(helpText(rest), "/ban"), helpText(rest));
+    }
+
+    /** Help is an embed now, so read the description when there is no content. */
+    private static String helpText(DiscordRest rest) {
+        String content = content(rest);
+        if (content != null && !content.isEmpty()) {
+            return content;
+        }
+        JSONObject data = reply(rest);
+        if (data == null) {
+            return "";
+        }
+        JSONArray embeds = data.optJSONArray("embeds");
+        if (embeds == null || embeds.length() == 0) {
+            return "";
+        }
+        return embeds.optJSONObject(0).optString("description", "");
     }
 
     private static void ping() throws Exception {

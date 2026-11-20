@@ -24,8 +24,13 @@ final class CommandToggles {
      * for custom commands under Discord's 100 command limit.
      */
     static final List<String> DEFAULT_OFF = java.util.Arrays.asList(
+            // Niche built-ins from the first release.
             "announce", "dm", "webhooks", "invites", "stickers", "events", "threads",
-            "emojiinfo", "serverbanner", "memberroles");
+            "emojiinfo", "serverbanner", "memberroles",
+            // The later batch: pick them in Settings → Commands when you want them.
+            "serverstats", "channels", "channelperms", "auditlog", "thread", "warn", "warnings",
+            "topinvites", "mock", "rot13", "caesar", "sortlines", "dedupe", "hex", "charinfo",
+            "repeat", "embed", "weekday", "percentage");
 
     private static final Set<String> DISABLED = new HashSet<>();
 

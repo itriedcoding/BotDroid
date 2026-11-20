@@ -80,7 +80,14 @@ final class CustomCommands {
             try {
                 JSONObject object = new JSONObject();
                 object.put("name", name);
-                object.put("description", "Custom command");
+                object.put("description", "Custom command — /custom functions lists the script language");
+                // One optional text option so $args / $arg[n] have something to read.
+                object.put("options", new JSONArray().put(new JSONObject()
+                        .put("type", 3)
+                        .put("name", "input")
+                        .put("description", "Text for this command (optional)")
+                        .put("required", false)
+                        .put("max_length", 500)));
                 array.put(object);
             } catch (Exception ignored) {
                 // skip malformed rows

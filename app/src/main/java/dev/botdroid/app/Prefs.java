@@ -16,6 +16,8 @@ final class Prefs {
     private static final String KEY_PRESENCE_URL = "presence_url";
     private static final String KEY_DISABLED_COMMANDS = "disabled_commands";
     private static final String KEY_AUTOSTART = "autostart";
+    private static final String KEY_VARIABLES = "script_variables";
+    private static final String KEY_WARNINGS = "warnings";
 
     private Prefs() {
     }
@@ -85,6 +87,30 @@ final class Prefs {
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean(KEY_AUTOSTART, enabled)
+                .apply();
+    }
+
+    static String variables(Context context) {
+        String value = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_VARIABLES, "");
+        return value == null ? "" : value;
+    }
+
+    static void variables(Context context, String json) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_VARIABLES, json)
+                .apply();
+    }
+
+    static String warnings(Context context) {
+        String value = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_WARNINGS, "");
+        return value == null ? "" : value;
+    }
+
+    static void warnings(Context context, String json) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_WARNINGS, json)
                 .apply();
     }
 

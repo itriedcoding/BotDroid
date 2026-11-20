@@ -58,6 +58,8 @@ public class SettingsActivity extends Activity {
                 startActivity(new Intent(this, CommandsActivity.class)));
         findViewById(R.id.presence_button).setOnClickListener(view ->
                 startActivity(new Intent(this, PresenceActivity.class)));
+        findViewById(R.id.builder_button).setOnClickListener(view ->
+                startActivity(new Intent(this, BuilderActivity.class)));
 
         findViewById(R.id.add_custom_button).setOnClickListener(view -> addCustomCommand());
 
