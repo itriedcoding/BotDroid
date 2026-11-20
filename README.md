@@ -15,7 +15,7 @@ No server, no hosting, no third-party libraries: the APK stays tiny.
 - **`/status`**: the phone the bot is running on — model, Android version,
   battery, network, RAM, storage, uptime — plus latency, server count and command
   slots. Everything is measured on the device, nothing is faked.
-- **Robot builder**: a full builder page (name, script editor, function palette,
+- **Bot builder**: a full builder page (name, script editor, function palette,
   test run, saved list) with a BDScript-style language: `$mention`, `$args`,
   `$upper[x]`, `$if[...]{...}`, `$setUserVar[name;value]` and about 60 more
   functions. `/custom functions` documents them in Discord too.
@@ -28,6 +28,8 @@ No server, no hosting, no third-party libraries: the APK stays tiny.
 - **Start on boot**: the bot comes back by itself after a phone restart.
 - **Bot status**: show the bot as playing, listening, watching, competing or
   with a custom status, and choose online / idle / do not disturb / invisible.
+- **Updates**: reads this project's GitHub releases, downloads a newer APK,
+  checks it is signed with the same key and hands it to Android's installer.
 - **Settings screen**: bot status, Roblox toggle, custom command management,
   re-register commands, forget the token.
 - Live activity log and status inside the app, with an animated entrance.
@@ -304,12 +306,37 @@ The **Settings** button on the main screen opens:
 - **Custom commands** — a quick-add field (name + response + **Add command**),
   the saved list with per-command **Remove**, and **Clear custom commands**. For
   scripts use the **Bot builder** button in the same card.
+- **Updates** — installed version and build number, **Check for updates** and
+  **Download and install**. It reads `releases/latest` from the GitHub API,
+  shows the tag, and only offers the install when that tag is newer.
 - **Start on boot** — restart the bot by itself when the phone reboots
   (Android 8–14; newer Android versions restrict foreground services started at
   boot).
 - **Re-register commands in Discord** — useful if Discord is showing a stale list.
 - **Forget token and stop** — clears the stored token and stops the bot.
 - Link to this repository.
+
+## Updates
+
+The app updates itself from the [Releases](../../releases) page:
+
+1. On launch it asks `https://api.github.com/repos/itriedcoding/BotDroid/releases/latest`
+   at most once a day (and **Check for updates** in Settings does it on demand).
+2. If `tag_name` is newer than the installed build, **Download and install**
+   fetches the release asset `BotDroid.apk` over TLS, following GitHub's
+   redirect to the asset host.
+3. The APK is rejected unless its signing certificate is identical to the
+   installed app's (SHA-256 of the certificate), and unless its size matches the
+   release metadata.
+4. The bytes are written into a `PackageInstaller` session and committed, so
+   Android shows its own update dialog and applies the install. There is no
+   silent install: on Android 8+ the app also has to be allowed to install
+   unknown apps, and the app opens that settings page when it is not.
+
+The update only works when the release APK is signed with the same key as the
+installed one, which is why `keystore/botdroid.jks` is committed and used by the
+release workflow. If the signature check fails, the download is deleted and the
+install is refused.
 
 ## Staying online
 
@@ -330,13 +357,26 @@ fields, so image assets, party data and buttons are intentionally not offered �
 they would be ignored.
 
 The full Discord Rich Presence with artwork belongs to the **Discord Social
-SDK**, a native library distributed for C++, Unreal and Unity (Android 7+ is
-supported, but as a native `.so` with its own OAuth/account-linking flow and a
-Discord app configured for the SDK). This project is a plain-Java APK built
-with `aapt2`/`javac` and no native dependencies, so the SDK is not bundled and
-the presence here uses the official gateway and REST API instead. Bundling it
-would need the SDK binary from the Discord Developer Portal and a JNI wrapper —
-a real, separate piece of work, not something to fake with a mock.
+SDK**, a native C++20 library (Android 7+ ships it as an `.aar`/`.so`) that
+authenticates **users** through OAuth account linking — not bots — and needs a
+Discord application with the Social SDK enabled, plus a mobile redirect URI of
+the form `discord-YOUR_APP_ID:/authorize/callback`.
+
+That SDK is not bundled here, and it is not stubbed out with a mock:
+
+- Discord only publishes the binaries under **Downloads** in the Developer
+  Portal, after the Social SDK is enabled for that specific application.
+- Its terms allow shipping the SDK *inside* your own application but not
+  redistributing the SDK itself, so its binaries do not belong in this public
+  repository or in the APK published from it.
+- BotDroid is a plain-Java APK built with `aapt2`/`javac` and no native
+  dependencies, and it runs a **bot**; the Social SDK would add a user OAuth
+  login, an account-linking flow, C++20 JNI and the NDK to the build.
+
+The presence page therefore uses the official gateway and REST API, which is
+everything a bot is allowed to set. Adding the Social SDK is a separate feature
+that starts with the SDK package and an app ID from the Discord portal, not with
+a JNI shim written against headers that are not present.
 
 ## Battery and reliability
 
@@ -358,8 +398,9 @@ export ANDROID_HOME="$HOME/Android/Sdk"
 adb install -r dist/BotDroid.apk
 ```
 
-Pushing to `main`, pushing a `v*` tag, or running the **Build and release APK**
-workflow publishes `BotDroid.apk` to GitHub Releases.
+`dist/` is build output and is not committed; the release workflow builds the
+APK from source and uploads it. Pushing to `main`, pushing a `v*` tag, or running
+the **Build and release APK** workflow publishes `BotDroid.apk` to GitHub Releases.
 `keystore/botdroid.jks` is a development signing key (password `botdroid`) so
 updated builds install over old ones; replace it for a store release.
 
@@ -421,6 +462,8 @@ app/src/main/java/dev/botdroid/app/
   Net.java              minimal HTTPS client (supports PATCH)
   LogBus.java           in-memory log shared with the UI
   Prefs.java            app-private storage
+  Updater.java          GitHub release check, APK check and installer session
+  UpdateReceiver.java   install result from Android's package installer
 ```
 
 Everything network-facing is built on plain sockets, so the app needs no

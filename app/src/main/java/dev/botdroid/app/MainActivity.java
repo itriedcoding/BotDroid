@@ -68,6 +68,7 @@ public class MainActivity extends Activity implements LogBus.Listener {
         }
         statusView.setText(LogBus.status());
         playEntrance();
+        Updater.autoCheck(this);
     }
 
     /** Fades the intro wordmark out and brings the screen in piece by piece. */

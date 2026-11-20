@@ -47,8 +47,6 @@
     <string name="commands_all_off">Turn all off</string>
     <string name="builder_title">Bot builder</string>
     <string name="builder_desc">Build commands the way Bot Designer for Discord does: pick functions, drop them into a script, test it on the phone and save. Responses are real Discord replies — nothing here is simulated.</string>
-    <string name="builder_card_title">Bot builder</string>
-    <string name="builder_card_desc">Write a command with $functions: $mention, $args, $if, variables and more. Preview it, then save it.</string>
     <string name="builder_open">Open bot builder</string>
     <string name="builder_name_label">COMMAND NAME</string>
     <string name="builder_name_hint">rules</string>
@@ -67,4 +65,9 @@
     <string name="builder_reference_title">Function reference</string>
     <string name="autostart_title">Start on boot</string>
     <string name="autostart_desc">Bring the bot back automatically when the phone restarts. The phone still has to be on: an app cannot stay online with the device powered off.</string>
+    <string name="update_title">Updates</string>
+    <string name="update_desc">Reads this project\'s GitHub releases once a day and installs a newer APK through Android\'s own installer. Only a build signed with this app\'s key is accepted.</string>
+    <string name="update_current">Installed %1$s · build %2$d</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_install">Download and install</string>
 </resources>

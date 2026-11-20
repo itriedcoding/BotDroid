@@ -8,6 +8,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLParameters;
@@ -107,6 +108,92 @@ final class Net {
                 // closing a broken socket is not interesting
             }
         }
+    }
+
+    /**
+     * Downloads a URL to memory, following redirects. GitHub answers a release
+     * asset with a 302 to a signed objects.githubusercontent.com URL, so the
+     * redirect hop has to be handled here; one request per connection.
+     */
+    static byte[] get(String url) throws IOException {
+        String target = url;
+        for (int hop = 0; hop < 6; hop++) {
+            if (!target.regionMatches(true, 0, "https://", 0, 8)) {
+                throw new IOException("Only https downloads are allowed");
+            }
+            String rest = target.substring(8);
+            int slash = rest.indexOf('/');
+            String host = slash < 0 ? rest : rest.substring(0, slash);
+            String path = slash < 0 ? "/" : rest.substring(slash);
+            SSLSocket socket = connect(host, 20000);
+            try {
+                StringBuilder head = new StringBuilder();
+                head.append("GET ").append(path).append(" HTTP/1.1\r\n");
+                head.append("Host: ").append(host).append("\r\n");
+                head.append("User-Agent: ").append(USER_AGENT).append("\r\n");
+                head.append("Accept: application/octet-stream\r\n");
+                head.append("Accept-Encoding: identity\r\n");
+                head.append("Connection: close\r\n\r\n");
+                OutputStream out = socket.getOutputStream();
+                out.write(head.toString().getBytes(StandardCharsets.UTF_8));
+                out.flush();
+
+                InputStream in = socket.getInputStream();
+                String responseHead = readHead(in);
+                int code = parseStatus(responseHead);
+                if (code >= 300 && code < 400) {
+                    String location = header(responseHead, "location");
+                    if (location == null) {
+                        throw new IOException("Redirect " + code + " without a Location header");
+                    }
+                    target = resolve(target, location);
+                    continue;
+                }
+                if (code != 200) {
+                    throw new IOException("HTTP " + code + " from " + host);
+                }
+                String lower = responseHead.toLowerCase(Locale.US);
+                if (lower.contains("transfer-encoding: chunked")) {
+                    return readChunked(in);
+                }
+                int length = contentLength(responseHead);
+                return length >= 0 ? readExactly(in, length) : readToEnd(in);
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException ignored) {
+                    // closing a broken socket is not interesting
+                }
+            }
+        }
+        throw new IOException("Too many redirects");
+    }
+
+    private static String header(String head, String name) {
+        for (String line : head.split("\r\n")) {
+            int colon = line.indexOf(':');
+            if (colon > 0 && line.substring(0, colon).trim().equalsIgnoreCase(name)) {
+                return line.substring(colon + 1).trim();
+            }
+        }
+        return null;
+    }
+
+    private static String resolve(String base, String location) {
+        if (location.regionMatches(true, 0, "https://", 0, 8)) {
+            return location;
+        }
+        if (location.regionMatches(true, 0, "http://", 0, 7)) {
+            return "https://" + location.substring(7);
+        }
+        String rest = base.substring(8);
+        int slash = rest.indexOf('/');
+        String origin = "https://" + (slash < 0 ? rest : rest.substring(0, slash));
+        if (location.startsWith("/")) {
+            return origin + location;
+        }
+        int cut = base.lastIndexOf('/');
+        return cut <= 8 ? origin + "/" + location : base.substring(0, cut + 1) + location;
     }
 
     private static String readHead(InputStream in) throws IOException {

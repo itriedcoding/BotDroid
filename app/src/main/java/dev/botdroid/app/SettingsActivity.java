@@ -12,6 +12,7 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.util.List;
 import java.util.Locale;
 
@@ -25,6 +26,10 @@ public class SettingsActivity extends Activity {
     private EditText customResponseInput;
     private TextView customBuilderStatus;
     private TextView refreshButton;
+    private TextView updateVersion;
+    private TextView updateStatus;
+    private TextView updateCheckButton;
+    private TextView updateInstallButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,6 +45,18 @@ public class SettingsActivity extends Activity {
         customResponseInput = findViewById(R.id.custom_response_input);
         customBuilderStatus = findViewById(R.id.custom_builder_status);
         refreshButton = findViewById(R.id.refresh_button);
+        updateVersion = findViewById(R.id.update_version);
+        updateStatus = findViewById(R.id.update_status);
+        updateCheckButton = findViewById(R.id.update_check_button);
+        updateInstallButton = findViewById(R.id.update_install_button);
+
+        updateVersion.setText(getString(R.string.update_current, BotState.VERSION, BotState.code()));
+        updateStatus.setText(Prefs.lastUpdateTag(this).isEmpty()
+                ? "Last check failed or has not run yet."
+                : "Last check: " + Prefs.lastUpdateTag(this) + " was the newest release.");
+        updateCheckButton.setOnClickListener(view -> checkForUpdates());
+        updateInstallButton.setOnClickListener(view -> downloadUpdate());
+        renderUpdate();
 
         robloxSwitch.setChecked(BotState.robloxEnabled);
         robloxSwitch.setOnCheckedChangeListener((button, checked) -> {
@@ -156,6 +173,69 @@ public class SettingsActivity extends Activity {
             row.addView(remove);
             customList.addView(row);
         }
+    }
+
+    private void renderUpdate() {
+        Updater.Release release = Updater.latest;
+        boolean newer = release != null && release.isNewer();
+        updateInstallButton.setEnabled(newer);
+        updateInstallButton.setAlpha(newer ? 1f : 0.45f);
+        updateInstallButton.setText(newer
+                ? getString(R.string.update_install) + " " + release.tag
+                : getString(R.string.update_install));
+    }
+
+    private void checkForUpdates() {
+        updateCheckButton.setEnabled(false);
+        updateStatus.setText("Checking github.com…");
+        new Thread(() -> {
+            Updater.Release found = null;
+            String failure = null;
+            try {
+                found = Updater.check();
+            } catch (Exception e) {
+                failure = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            }
+            final Updater.Release release = found;
+            final String error = failure;
+            runOnUiThread(() -> {
+                updateCheckButton.setEnabled(true);
+                if (error != null) {
+                    updateStatus.setText("Could not check for updates: " + error);
+                    return;
+                }
+                Prefs.updateChecked(this, release.tag);
+                updateStatus.setText(release.isNewer()
+                        ? "BotDroid " + release.tag + " is available."
+                        : "BotDroid " + release.tag + " is the newest release — this app is up to date.");
+                renderUpdate();
+            });
+        }, "botdroid-update-check").start();
+    }
+
+    private void downloadUpdate() {
+        final Updater.Release release = Updater.latest;
+        if (release == null || !release.isNewer()) {
+            return;
+        }
+        updateInstallButton.setEnabled(false);
+        new Thread(() -> {
+            String result = "Android's installer will ask you to confirm the update.";
+            try {
+                File apk = Updater.download(this, release,
+                        message -> runOnUiThread(() -> updateStatus.setText(message)));
+                Updater.install(this, apk,
+                        message -> runOnUiThread(() -> updateStatus.setText(message)));
+            } catch (Exception e) {
+                result = "Update failed: "
+                        + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            }
+            final String message = result;
+            runOnUiThread(() -> {
+                updateStatus.setText(message);
+                renderUpdate();
+            });
+        }, "botdroid-update-download").start();
     }
 
     private void addCustomCommand() {

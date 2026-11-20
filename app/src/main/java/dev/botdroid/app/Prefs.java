@@ -18,6 +18,8 @@ final class Prefs {
     private static final String KEY_AUTOSTART = "autostart";
     private static final String KEY_VARIABLES = "script_variables";
     private static final String KEY_WARNINGS = "warnings";
+    private static final String KEY_UPDATE_CHECK = "update_checked_at";
+    private static final String KEY_UPDATE_TAG = "update_tag";
 
     private Prefs() {
     }
@@ -112,6 +114,25 @@ final class Prefs {
                 .edit()
                 .putString(KEY_WARNINGS, json)
                 .apply();
+    }
+
+    static boolean updateCheckDue(Context context, long intervalMs) {
+        long last = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getLong(KEY_UPDATE_CHECK, 0L);
+        return System.currentTimeMillis() - last > intervalMs;
+    }
+
+    /** Records a successful check; an empty tag means the check failed. */
+    static void updateChecked(Context context, String tag) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+                .edit()
+                .putLong(KEY_UPDATE_CHECK, System.currentTimeMillis())
+                .putString(KEY_UPDATE_TAG, tag)
+                .apply();
+    }
+
+    static String lastUpdateTag(Context context) {
+        String value = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_UPDATE_TAG, "");
+        return value == null ? "" : value;
     }
 
     static String customCommands(Context context) {
