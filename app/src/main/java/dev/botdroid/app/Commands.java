@@ -21,7 +21,25 @@ final class Commands {
     static final long MANAGE_MESSAGES = 1L << 13;
     static final long MANAGE_NICKNAMES = 1L << 27;
     static final long MANAGE_ROLES = 1L << 28;
+    static final long MUTE_MEMBERS = 1L << 22;
+    static final long DEAFEN_MEMBERS = 1L << 23;
+    static final long MOVE_MEMBERS = 1L << 24;
     static final long MODERATE_MEMBERS = 1L << 40;
+
+    private static final long[] PERMISSION_BITS = {
+            1L << 3, 1L << 5, 1L << 4, 1L << 28, 1L << 27, 1L << 13, 1L << 1, 1L << 2, 1L << 40,
+            1L << 7, 1L << 17, 1L << 24, 1L << 22, 1L << 23, 1L << 29, 1L << 30, 1L << 10, 1L << 11,
+            1L << 14, 1L << 15, 1L << 16, 1L << 18, 1L << 6, 1L << 20, 1L << 21, 1L << 26, 1L << 31
+    };
+
+    private static final String[] PERMISSION_LABELS = {
+            "Administrator", "Manage Server", "Manage Channels", "Manage Roles", "Manage Nicknames",
+            "Manage Messages", "Kick Members", "Ban Members", "Moderate Members", "View Audit Log",
+            "Mention Everyone", "Move Members", "Mute Members", "Deafen Members", "Manage Webhooks",
+            "Manage Emojis", "View Channels", "Send Messages", "Embed Links", "Attach Files",
+            "Read Message History", "Use External Emojis", "Add Reactions", "Connect", "Speak",
+            "Change Nickname", "Use Application Commands"
+    };
 
     private static final Random RANDOM = new Random();
 
@@ -45,8 +63,17 @@ final class Commands {
             + "`/hide` `/unhide` `/topic` `/nick` `/addrole` `/removerole` `/banlist` `/pin` `/unpin` `/say`\n"
             + "__Fun__\n"
             + "`/8ball` `/roll` `/coinflip` `/rps` `/joke` `/fact` `/quote` `/rate` `/reverse`\n"
+            + "__Info__\n"
+            + "`/about` `/servericon` `/banner` `/timestamp` `/snowflake` `/myperms` `/pins` `/inviteinfo`\n"
+            + "__Text tools__\n"
+            + "`/password` `/uuid` `/hash` `/url` `/case` `/wordcount`\n"
+            + "__Roles, channels, voice__\n"
+            + "`/roleinfo` `/rolecolor` `/createrole` `/createchannel` `/clonechannel` `/move` `/mute` `/deafen` "
+            + "`/untimeout` `/baninfo`\n"
+            + "__More fun__\n"
+            + "`/fortune` `/compliment` `/hug` `/pat` `/clap` `/spoiler`\n"
             + "__Roblox__\n"
-            + "`/roblox user|avatar|game|group`\n"
+            + "`/roblox user|avatar|game|group|games`\n"
             + "__Custom__\n"
             + "`/custom add|remove|list|clear`\n"
             + "Build your own: `/custom add name:hello response:Hi {user}!`";
@@ -153,6 +180,72 @@ final class Commands {
             + "{\"type\":3,\"name\":\"thing\",\"description\":\"What to rate\",\"required\":true,\"max_length\":100}]},"
             + "{\"name\":\"reverse\",\"description\":\"Reverse some text\",\"options\":["
             + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to reverse\",\"required\":true,\"max_length\":500}]},"
+            + "{\"name\":\"about\",\"description\":\"About BotDroid: version, commands and source\"},"
+            + "{\"name\":\"servericon\",\"description\":\"Show this server's icon\"},"
+            + "{\"name\":\"banner\",\"description\":\"Show a user profile banner\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"User (defaults to you)\",\"required\":false}]},"
+            + "{\"name\":\"timestamp\",\"description\":\"Build Discord timestamps from unix time\",\"options\":["
+            + "{\"type\":3,\"name\":\"when\",\"description\":\"now, unix seconds or milliseconds\",\"required\":true,\"max_length\":32}]},"
+            + "{\"name\":\"snowflake\",\"description\":\"Find when a Discord ID was created\",\"options\":["
+            + "{\"type\":3,\"name\":\"id\",\"description\":\"Discord ID\",\"required\":true,\"max_length\":24}]},"
+            + "{\"name\":\"myperms\",\"description\":\"Show your permissions in this server\"},"
+            + "{\"name\":\"pins\",\"description\":\"List pinned messages in this channel\"},"
+            + "{\"name\":\"inviteinfo\",\"description\":\"Inspect a Discord invite\",\"options\":["
+            + "{\"type\":3,\"name\":\"code\",\"description\":\"Invite code or link\",\"required\":true,\"max_length\":120}]},"
+            + "{\"name\":\"password\",\"description\":\"Generate a random password\",\"options\":["
+            + "{\"type\":4,\"name\":\"length\",\"description\":\"Length (8-64, default 16)\",\"required\":false,\"min_value\":8,\"max_value\":64}]},"
+            + "{\"name\":\"uuid\",\"description\":\"Generate a random UUID\"},"
+            + "{\"name\":\"hash\",\"description\":\"Hash some text\",\"options\":["
+            + "{\"type\":3,\"name\":\"algorithm\",\"description\":\"Hash algorithm\",\"required\":true,\"choices\":["
+            + "{\"name\":\"md5\",\"value\":\"md5\"},{\"name\":\"sha1\",\"value\":\"sha1\"},{\"name\":\"sha256\",\"value\":\"sha256\"}]},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to hash\",\"required\":true,\"max_length\":1000}]},"
+            + "{\"name\":\"url\",\"description\":\"URL encode or decode text\",\"options\":["
+            + "{\"type\":3,\"name\":\"mode\",\"description\":\"encode or decode\",\"required\":true,\"choices\":["
+            + "{\"name\":\"encode\",\"value\":\"encode\"},{\"name\":\"decode\",\"value\":\"decode\"}]},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to process\",\"required\":true,\"max_length\":1000}]},"
+            + "{\"name\":\"case\",\"description\":\"Change text case\",\"options\":["
+            + "{\"type\":3,\"name\":\"mode\",\"description\":\"Case style\",\"required\":true,\"choices\":["
+            + "{\"name\":\"upper\",\"value\":\"upper\"},{\"name\":\"lower\",\"value\":\"lower\"},"
+            + "{\"name\":\"title\",\"value\":\"title\"},{\"name\":\"swap\",\"value\":\"swap\"}]},"
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to change\",\"required\":true,\"max_length\":500}]},"
+            + "{\"name\":\"wordcount\",\"description\":\"Count characters, words and lines\",\"options\":["
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to count\",\"required\":true,\"max_length\":1000}]},"
+            + "{\"name\":\"roleinfo\",\"description\":\"Show details about a role\",\"options\":["
+            + "{\"type\":8,\"name\":\"role\",\"description\":\"Role\",\"required\":true}]},"
+            + "{\"name\":\"rolecolor\",\"description\":\"Change a role colour\",\"default_member_permissions\":\"268435456\",\"options\":["
+            + "{\"type\":8,\"name\":\"role\",\"description\":\"Role\",\"required\":true},"
+            + "{\"type\":3,\"name\":\"hex\",\"description\":\"Hex colour, for example #5865F2\",\"required\":true,\"max_length\":12}]},"
+            + "{\"name\":\"createrole\",\"description\":\"Create a role\",\"default_member_permissions\":\"268435456\",\"options\":["
+            + "{\"type\":3,\"name\":\"name\",\"description\":\"Role name\",\"required\":true,\"max_length\":100},"
+            + "{\"type\":3,\"name\":\"color\",\"description\":\"Optional hex colour\",\"required\":false,\"max_length\":12}]},"
+            + "{\"name\":\"createchannel\",\"description\":\"Create a text or voice channel\",\"default_member_permissions\":\"16\",\"options\":["
+            + "{\"type\":3,\"name\":\"name\",\"description\":\"Channel name\",\"required\":true,\"max_length\":100},"
+            + "{\"type\":3,\"name\":\"type\",\"description\":\"Channel type\",\"required\":false,\"choices\":["
+            + "{\"name\":\"text\",\"value\":\"text\"},{\"name\":\"voice\",\"value\":\"voice\"}]}]},"
+            + "{\"name\":\"clonechannel\",\"description\":\"Copy this channel's settings into a new one\",\"default_member_permissions\":\"16\"},"
+            + "{\"name\":\"move\",\"description\":\"Move a member to a voice channel\",\"default_member_permissions\":\"16777216\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true},"
+            + "{\"type\":7,\"name\":\"channel\",\"description\":\"Voice channel\",\"required\":true}]},"
+            + "{\"name\":\"mute\",\"description\":\"Server mute a member\",\"default_member_permissions\":\"4194304\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true}]},"
+            + "{\"name\":\"deafen\",\"description\":\"Server deafen a member\",\"default_member_permissions\":\"8388608\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true}]},"
+            + "{\"name\":\"untimeout\",\"description\":\"Remove a member timeout\",\"default_member_permissions\":\"1099511627776\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Member\",\"required\":true},"
+            + "{\"type\":3,\"name\":\"reason\",\"description\":\"Reason\",\"required\":false,\"max_length\":512}]},"
+            + "{\"name\":\"baninfo\",\"description\":\"Check why a user was banned\",\"default_member_permissions\":\"4\",\"options\":["
+            + "{\"type\":3,\"name\":\"user_id\",\"description\":\"Banned user ID\",\"required\":true,\"max_length\":24}]},"
+            + "{\"name\":\"fortune\",\"description\":\"Open a fortune cookie\"},"
+            + "{\"name\":\"compliment\",\"description\":\"Compliment someone\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Who to compliment\",\"required\":false}]},"
+            + "{\"name\":\"hug\",\"description\":\"Hug someone\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Who to hug\",\"required\":true}]},"
+            + "{\"name\":\"pat\",\"description\":\"Pat someone on the head\",\"options\":["
+            + "{\"type\":6,\"name\":\"user\",\"description\":\"Who to pat\",\"required\":true}]},"
+            + "{\"name\":\"clap\",\"description\":\"Put claps between words\",\"options\":["
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to clap\",\"required\":true,\"max_length\":500}]},"
+            + "{\"name\":\"spoiler\",\"description\":\"Hide text behind a spoiler\",\"options\":["
+            + "{\"type\":3,\"name\":\"text\",\"description\":\"Text to hide\",\"required\":true,\"max_length\":500}]},"
             + "{\"name\":\"roblox\",\"description\":\"Roblox lookups\",\"options\":["
             + "{\"type\":1,\"name\":\"user\",\"description\":\"Look up a Roblox user\",\"options\":["
             + "{\"type\":3,\"name\":\"username\",\"description\":\"Roblox username\",\"required\":true,\"max_length\":32}]},"
@@ -161,7 +254,9 @@ final class Commands {
             + "{\"type\":1,\"name\":\"game\",\"description\":\"Look up a Roblox game\",\"options\":["
             + "{\"type\":3,\"name\":\"universe_id\",\"description\":\"Roblox universe ID\",\"required\":true,\"max_length\":24}]},"
             + "{\"type\":1,\"name\":\"group\",\"description\":\"Look up a Roblox group\",\"options\":["
-            + "{\"type\":3,\"name\":\"group_id\",\"description\":\"Roblox group ID\",\"required\":true,\"max_length\":24}]}]},"
+            + "{\"type\":3,\"name\":\"group_id\",\"description\":\"Roblox group ID\",\"required\":true,\"max_length\":24}]},"
+            + "{\"type\":1,\"name\":\"games\",\"description\":\"List a user's Roblox games\",\"options\":["
+            + "{\"type\":3,\"name\":\"username\",\"description\":\"Roblox username\",\"required\":true,\"max_length\":32}]}]},"
             + "{\"name\":\"custom\",\"description\":\"Create and manage your own commands\",\"options\":["
             + "{\"type\":1,\"name\":\"add\",\"description\":\"Create or overwrite a command\",\"options\":["
             + "{\"type\":3,\"name\":\"name\",\"description\":\"Command name, e.g. discord\",\"required\":true,\"max_length\":32},"
@@ -319,6 +414,66 @@ final class Commands {
                 CommandsFun.rate(rest, interaction);
             } else if ("reverse".equals(name)) {
                 CommandsFun.reverse(rest, interaction);
+            } else if ("about".equals(name)) {
+                CommandsInfo.about(rest, interaction);
+            } else if ("servericon".equals(name)) {
+                CommandsInfo.serverIcon(rest, interaction);
+            } else if ("banner".equals(name)) {
+                CommandsInfo.banner(rest, interaction);
+            } else if ("timestamp".equals(name)) {
+                CommandsInfo.timestamp(rest, interaction);
+            } else if ("snowflake".equals(name)) {
+                CommandsInfo.snowflake(rest, interaction);
+            } else if ("myperms".equals(name)) {
+                CommandsInfo.myPermissions(rest, interaction);
+            } else if ("pins".equals(name)) {
+                CommandsInfo.pins(rest, interaction);
+            } else if ("inviteinfo".equals(name)) {
+                CommandsInfo.inviteInfo(rest, interaction);
+            } else if ("password".equals(name)) {
+                CommandsInfo.password(rest, interaction);
+            } else if ("uuid".equals(name)) {
+                CommandsInfo.uuid(rest, interaction);
+            } else if ("hash".equals(name)) {
+                CommandsInfo.hash(rest, interaction);
+            } else if ("url".equals(name)) {
+                CommandsInfo.url(rest, interaction);
+            } else if ("case".equals(name)) {
+                CommandsInfo.textCase(rest, interaction);
+            } else if ("wordcount".equals(name)) {
+                CommandsInfo.wordCount(rest, interaction);
+            } else if ("roleinfo".equals(name)) {
+                CommandsAdmin.roleInfo(rest, interaction);
+            } else if ("rolecolor".equals(name)) {
+                CommandsAdmin.roleColor(rest, interaction);
+            } else if ("createrole".equals(name)) {
+                CommandsAdmin.createRole(rest, interaction);
+            } else if ("createchannel".equals(name)) {
+                CommandsAdmin.createChannel(rest, interaction);
+            } else if ("clonechannel".equals(name)) {
+                CommandsAdmin.cloneChannel(rest, interaction);
+            } else if ("move".equals(name)) {
+                CommandsAdmin.move(rest, interaction);
+            } else if ("mute".equals(name)) {
+                CommandsAdmin.mute(rest, interaction);
+            } else if ("deafen".equals(name)) {
+                CommandsAdmin.deafen(rest, interaction);
+            } else if ("untimeout".equals(name)) {
+                CommandsAdmin.unTimeout(rest, interaction);
+            } else if ("baninfo".equals(name)) {
+                CommandsAdmin.banInfo(rest, interaction);
+            } else if ("fortune".equals(name)) {
+                CommandsFun2.fortune(rest, interaction);
+            } else if ("compliment".equals(name)) {
+                CommandsFun2.compliment(rest, interaction);
+            } else if ("hug".equals(name)) {
+                CommandsFun2.hug(rest, interaction);
+            } else if ("pat".equals(name)) {
+                CommandsFun2.pat(rest, interaction);
+            } else if ("clap".equals(name)) {
+                CommandsFun2.clap(rest, interaction);
+            } else if ("spoiler".equals(name)) {
+                CommandsFun2.spoiler(rest, interaction);
             } else if ("roblox".equals(name)) {
                 CommandsRoblox.handle(rest, interaction);
             } else if ("custom".equals(name)) {
@@ -948,6 +1103,16 @@ final class Commands {
         }
         String extension = hash.startsWith("a_") ? ".gif" : ".png";
         return "https://cdn.discordapp.com/avatars/" + userId + "/" + hash + extension + "?size=1024";
+    }
+
+    static List<String> permissionNames(long bits) {
+        List<String> names = new ArrayList<>();
+        for (int i = 0; i < PERMISSION_BITS.length; i++) {
+            if ((bits & PERMISSION_BITS[i]) != 0) {
+                names.add(PERMISSION_LABELS[i]);
+            }
+        }
+        return names;
     }
 
     static String orDefault(String value, String fallback) {

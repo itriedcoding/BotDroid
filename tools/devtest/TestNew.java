@@ -30,6 +30,7 @@ public final class TestNew {
         custom();
         roblox();
         presence();
+        commandsPlus();
         System.out.println();
         System.out.println("new: " + passed + " passed, " + failed + " failed");
         if (failed > 0) {
@@ -39,7 +40,7 @@ public final class TestNew {
 
     private static void definitions() throws Exception {
         JSONArray defs = Commands.definitions();
-        check("50 preset commands", defs.length() == 50, "count=" + defs.length());
+        check("80 preset commands", defs.length() == 80, "count=" + defs.length());
         StringBuilder problems = new StringBuilder();
         Set<String> names = new HashSet<>();
         for (int i = 0; i < defs.length(); i++) {
@@ -64,8 +65,8 @@ public final class TestNew {
             }
         }
         check("definitions valid", problems.length() == 0, problems.toString());
-        check("roblox subcommands", subNames(defs, "roblox").toString().equals("[user, avatar, game, group]"),
-                subNames(defs, "roblox").toString());
+        check("roblox subcommands", subNames(defs, "roblox").toString()
+                .equals("[user, avatar, game, group, games]"), subNames(defs, "roblox").toString());
         check("custom subcommands", subNames(defs, "custom").toString().equals("[add, remove, list, clear]"),
                 subNames(defs, "custom").toString());
     }
@@ -74,7 +75,7 @@ public final class TestNew {
         for (int i = 0; i < options.length(); i++) {
             JSONObject option = options.getJSONObject(i);
             int type = option.optInt("type", -1);
-            if (type != 1 && type != 3 && type != 4 && type != 6 && type != 8) {
+            if (type != 1 && type != 3 && type != 4 && type != 6 && type != 7 && type != 8) {
                 problems.append("type:").append(command).append(';');
             }
             if (option.optString("name", "").isEmpty()) {
@@ -377,6 +378,15 @@ public final class TestNew {
         rest = new DiscordRest("t");
         Commands.handle(rest, customInteraction("add", "name", "Bad Name!", "response", "x"));
         check("custom validates names", CustomCommands.count() == 0, "invalid name accepted");
+
+        CustomCommands.load("[]");
+        for (int i = 0; i < CustomCommands.MAX; i++) {
+            CustomCommands.add("cmd" + i, "x");
+        }
+        check("custom limit is 20", CustomCommands.MAX == 20, "max=" + CustomCommands.MAX);
+        check("custom rejects overflow", CustomCommands.add("overflow", "x") != null
+                && CustomCommands.count() == CustomCommands.MAX, "count=" + CustomCommands.count());
+        CustomCommands.load("[]");
     }
 
     private static void roblox() throws Exception {
@@ -436,6 +446,253 @@ public final class TestNew {
                 "len=" + BotPresence.text.length());
 
         BotPresence.set(BotPresence.PLAYING, "", "online");
+    }
+
+    private static void commandsPlus() throws Exception {
+        DiscordRest rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("about", "G", "C", 0));
+        check("about shows version", contains(embedDescription(rest), BotState.VERSION), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G".equals(p)
+                ? new Net.Resp(200, "{\"name\":\"Server\",\"icon\":\"abc\"}") : null;
+        Commands.handle(rest, interaction("servericon", "G", "C", 0));
+        JSONObject image = embeds(rest).optJSONObject(0).optJSONObject("image");
+        check("servericon url", image != null && image.optString("url").contains("icons/G/abc.png"),
+                image == null ? "no image" : image.toString());
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/users/55".equals(p)
+                ? new Net.Resp(200, "{\"username\":\"bob\",\"banner\":\"bee\"}") : null;
+        Commands.handle(rest, interaction("banner", "G", "C", 0, userOption("user", "55", "bob")));
+        image = embeds(rest).optJSONObject(0).optJSONObject("image");
+        check("banner url", image != null && image.optString("url").contains("banners/55/bee.png"),
+                image == null ? "no image" : image.toString());
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/users/100".equals(p)
+                ? new Net.Resp(200, "{\"username\":\"tester\"}") : null;
+        Commands.handle(rest, interaction("banner", "G", "C", 0));
+        check("banner missing", contains(content(rest), "no profile banner"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("timestamp", "G", "C", 0, stringOption("when", "1700000000")));
+        check("timestamp builds markup", contains(content(rest), "<t:1700000000:F>"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("timestamp", "G", "C", 0, stringOption("when", "tomorrow")));
+        check("timestamp rejects junk", contains(content(rest), "not a timestamp"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("snowflake", "G", "C", 0, stringOption("id", "175928847299117063")));
+        // 175928847299117063 was created 2016-04-30T11:18:25.796Z
+        check("snowflake decodes", contains(content(rest), "<t:1462015105:F>"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("password", "G", "C", 0, intOption("length", 24)));
+        String password = content(rest).replace("```", "").trim();
+        check("password length", password.length() == 24, "len=" + password.length());
+        check("password is ephemeral", reply(rest).optInt("flags") == 64, "flags=" + reply(rest).optInt("flags"));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("uuid", "G", "C", 0));
+        check("uuid format", content(rest).matches("`[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}`"),
+                content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("hash", "G", "C", 0, stringOption("algorithm", "sha256"),
+                stringOption("text", "abc")));
+        check("sha256 hashes", contains(content(rest),
+                "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("url", "G", "C", 0, stringOption("mode", "encode"),
+                stringOption("text", "a b")));
+        check("url encode", contains(content(rest), "a%20b"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("url", "G", "C", 0, stringOption("mode", "decode"),
+                stringOption("text", "a%20b")));
+        check("url decode", contains(content(rest), "a b"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("case", "G", "C", 0, stringOption("mode", "upper"),
+                stringOption("text", "hello")));
+        check("case upper", "HELLO".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("wordcount", "G", "C", 0, stringOption("text", "a b\nc")));
+        check("wordcount words", contains(content(rest), "**Words:** 3"), content(rest));
+        check("wordcount lines", contains(content(rest), "**Lines:** 2"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("myperms", "G", "C", 1L << 3));
+        check("myperms administrator", contains(embedDescription(rest), "Administrator"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("myperms", "G", "C", (1L << 11) | (1L << 14)));
+        check("myperms lists bits", contains(embedDescription(rest), "Send Messages")
+                && contains(embedDescription(rest), "Embed Links"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/channels/C/pins".equals(p)
+                ? new Net.Resp(200, "[{\"id\":\"9\",\"content\":\"hello pin\",\"author\":{\"username\":\"bob\"}}]")
+                : null;
+        Commands.handle(rest, interaction("pins", "G", "C", 0));
+        check("pins lists content", contains(embedDescription(rest), "hello pin"), embedDescription(rest));
+        check("pins links", contains(embedDescription(rest), "/channels/G/C/9"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/channels/C/pins".equals(p)
+                ? new Net.Resp(200, "[]") : null;
+        Commands.handle(rest, interaction("pins", "G", "C", 0));
+        check("pins empty", contains(content(rest), "No pinned"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && p.startsWith("/invites/abc")
+                ? new Net.Resp(200, "{\"guild\":{\"name\":\"Cool Server\",\"approximate_member_count\":12},"
+                        + "\"channel\":{\"name\":\"general\"},\"uses\":3}") : null;
+        Commands.handle(rest, interaction("inviteinfo", "G", "C", 0,
+                stringOption("code", "https://discord.gg/abc")));
+        check("inviteinfo strips link", contains(embedDescription(rest), "Cool Server"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "PATCH".equals(m) ? new Net.Resp(200, "{}") : null;
+        Commands.handle(rest, interaction("untimeout", "G", "C", 1L << 40, userOption("user", "55", "bob")));
+        DiscordRest.Call untimeout = lastPatch(rest);
+        check("untimeout clears timeout", untimeout != null && untimeout.body != null
+                && untimeout.body.contains("communication_disabled_until") && untimeout.body.contains("null"),
+                untimeout == null ? "no patch" : untimeout.body);
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("untimeout", "G", "C", 0, userOption("user", "55", "bob")));
+        check("untimeout needs permission", contains(content(rest), "Moderate Members"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G/bans/55".equals(p)
+                ? new Net.Resp(404, "{\"message\":\"Unknown Ban\"}") : null;
+        Commands.handle(rest, interaction("baninfo", "G", "C", 4, stringOption("user_id", "55")));
+        check("baninfo not banned", contains(content(rest), "not banned"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G/bans/55".equals(p)
+                ? new Net.Resp(200, "{\"user\":{\"id\":\"55\",\"username\":\"spammer\"},\"reason\":\"spam\"}")
+                : null;
+        Commands.handle(rest, interaction("baninfo", "G", "C", 4, stringOption("user_id", "55")));
+        check("baninfo reason", contains(embedDescription(rest), "spam"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && "/guilds/G/roles".equals(p)
+                ? new Net.Resp(200, "[{\"id\":\"77\",\"name\":\"Admin\",\"color\":5793266,\"position\":2,"
+                        + "\"hoist\":true,\"mentionable\":false,\"managed\":false,\"permissions\":\"8\"}]")
+                : null;
+        Commands.handle(rest, interaction("roleinfo", "G", "C", 0, roleOption("role", "77")));
+        check("roleinfo title", "Admin".equals(embedTitle(rest)), embedTitle(rest));
+        check("roleinfo permissions", contains(embedDescription(rest), "Administrator"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "PATCH".equals(m) ? new Net.Resp(200, "{}") : null;
+        Commands.handle(rest, interaction("rolecolor", "G", "C", 1L << 28, roleOption("role", "77"),
+                stringOption("hex", "#FF0000")));
+        DiscordRest.Call colorPatch = lastPatch(rest);
+        check("rolecolor body", colorPatch != null && colorPatch.body != null
+                && colorPatch.body.contains("16711680"), colorPatch == null ? "no patch" : colorPatch.body);
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "POST".equals(m) && "/guilds/G/roles".equals(p)
+                ? new Net.Resp(201, "{\"id\":\"88\"}") : null;
+        Commands.handle(rest, interaction("createrole", "G", "C", 1L << 28, stringOption("name", "Helpers")));
+        DiscordRest.Call rolePost = rest.lastNonCallback();
+        check("createrole posts name", rolePost != null && rolePost.body != null
+                && rolePost.body.contains("Helpers"), rolePost == null ? "no post" : rolePost.body);
+        check("createrole mentions", contains(content(rest), "<@&88>"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "POST".equals(m) && "/guilds/G/channels".equals(p)
+                ? new Net.Resp(201, "{\"id\":\"99\"}") : null;
+        Commands.handle(rest, interaction("createchannel", "G", "C", 16, stringOption("name", "Voice Room"),
+                stringOption("type", "voice")));
+        DiscordRest.Call channelPost = rest.lastNonCallback();
+        check("createchannel voice type", channelPost != null && channelPost.body != null
+                && channelPost.body.contains("\"type\":2") && channelPost.body.contains("voice-room"),
+                channelPost == null ? "no post" : channelPost.body);
+        check("createchannel mentions", contains(content(rest), "<#99>"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> {
+            if ("GET".equals(m) && "/channels/C".equals(p)) {
+                return new Net.Resp(200, "{\"name\":\"general\",\"type\":0,\"topic\":\"hi\","
+                        + "\"permission_overwrites\":[{\"id\":\"G\",\"type\":0,\"allow\":\"0\",\"deny\":\"0\"}]}");
+            }
+            if ("POST".equals(m) && "/guilds/G/channels".equals(p)) {
+                return new Net.Resp(201, "{\"id\":\"100\"}");
+            }
+            return null;
+        };
+        Commands.handle(rest, interaction("clonechannel", "G", "C", 16));
+        channelPost = rest.lastNonCallback();
+        check("clonechannel copies settings", channelPost != null && channelPost.body != null
+                && channelPost.body.contains("general-copy") && channelPost.body.contains("permission_overwrites")
+                && channelPost.body.contains("hi"), channelPost == null ? "no post" : channelPost.body);
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "PATCH".equals(m) ? new Net.Resp(200, "{}") : null;
+        Commands.handle(rest, interaction("move", "G", "C", 1L << 24, userOption("user", "55", "bob"),
+                channelOption("channel", "VC")));
+        DiscordRest.Call move = lastPatch(rest);
+        check("move sets channel", move != null && move.body != null && move.body.contains("\"channel_id\":\"VC\""),
+                move == null ? "no patch" : move.body);
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("move", "G", "C", 0, userOption("user", "55", "bob"),
+                channelOption("channel", "VC")));
+        check("move needs permission", contains(content(rest), "Move Members"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "PATCH".equals(m) ? new Net.Resp(200, "{}") : null;
+        Commands.handle(rest, interaction("mute", "G", "C", 1L << 22, userOption("user", "55", "bob")));
+        DiscordRest.Call mute = lastPatch(rest);
+        check("mute body", mute != null && mute.body != null && mute.body.contains("\"mute\":true"),
+                mute == null ? "no patch" : mute.body);
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "PATCH".equals(m) ? new Net.Resp(200, "{}") : null;
+        Commands.handle(rest, interaction("deafen", "G", "C", 1L << 23, userOption("user", "55", "bob")));
+        DiscordRest.Call deafen = lastPatch(rest);
+        check("deafen body", deafen != null && deafen.body != null && deafen.body.contains("\"deaf\":true"),
+                deafen == null ? "no patch" : deafen.body);
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("fortune", "G", "C", 0));
+        check("fortune", content(rest) != null && content(rest).length() > 15, content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("compliment", "G", "C", 0, userOption("user", "55", "bob")));
+        check("compliment mentions", contains(content(rest), "<@55>"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("hug", "G", "C", 0, userOption("user", "55", "bob")));
+        check("hug action", contains(content(rest), "hugs <@55>"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("pat", "G", "C", 0, userOption("user", "55", "bob")));
+        check("pat action", contains(content(rest), "pats <@55>"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("clap", "G", "C", 0, stringOption("text", "a b")));
+        check("clap inserts emoji", "a 👏 b".equals(content(rest)), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, interaction("spoiler", "G", "C", 0, stringOption("text", "secret")));
+        check("spoiler wraps text", "||secret||".equals(content(rest)), content(rest));
+    }
+
+    private static JSONObject roleOption(String name, String id) throws Exception {
+        return new JSONObject().put("name", name).put("type", 8).put("value", id);
+    }
+
+    private static JSONObject channelOption(String name, String id) throws Exception {
+        return new JSONObject().put("name", name).put("type", 7).put("value", id);
     }
 
     private static JSONObject interaction(String name, String guild, String channel, long permissions,

@@ -1,24 +1,25 @@
 # BotDroid
 
 A Discord bot that runs **on your phone**. Paste a bot token, press Start, and
-50 preset slash commands appear in every server the bot is in — plus Roblox
-lookups, custom commands you create yourself, a configurable bot status
+80 preset slash commands appear in every server the bot is in — plus Roblox
+lookups, a command builder inside the app, a configurable bot status
 (playing, watching, competing, custom text) and a settings screen.
-No server, no hosting, no third-party libraries: the APK is around 70 KB.
+No server, no hosting, no third-party libraries: the APK is around 85 KB.
 
 ## What it does
 
 - Connects to the Discord gateway and stays online inside a foreground service.
-- Registers 50 slash commands in every server the bot joins, and re-registers
+- Registers 80 slash commands in every server the bot joins, and re-registers
   them automatically when you add a custom command.
 - **Roblox lookups** through the public Roblox API: users, avatars, games, groups.
-- **Custom commands**: create your own with `/custom add name response` and
-  invoke them like `/hello`.
+- **Command builder**: type a name and a response in Settings, press **Add
+  command**, and `/name` exists in every server. Remove commands from the same
+  list. `/custom add name response` in Discord still works too.
 - **Bot status**: show the bot as playing, listening, watching, competing or
   with a custom status, and choose online / idle / do not disturb / invisible.
 - **Settings screen**: bot status, Roblox toggle, custom command management,
   re-register commands, forget the token.
-- Live activity log and status inside the app.
+- Live activity log and status inside the app, with an animated entrance.
 
 ## Install
 
@@ -90,6 +91,32 @@ BotDroid needs only the `GUILDS` intent, so no privileged intents are required.
 | `/banlist` | Recent bans and reasons | Ban Members |
 | `/pin` `/unpin` | Pin or unpin a message by ID | Manage Messages |
 | `/say` | Post a message as the bot | Manage Messages |
+| `/untimeout` | Remove a member timeout | Moderate Members |
+| `/baninfo` | Why a user was banned | Ban Members |
+| `/roleinfo` | Role colour, position, flags and key permissions | — |
+| `/rolecolor` | Change a role colour | Manage Roles |
+| `/createrole` | Create a role, optionally coloured | Manage Roles |
+| `/createchannel` | Create a text or voice channel | Manage Channels |
+| `/clonechannel` | Copy this channel's topic, slowmode and overwrites | Manage Channels |
+| `/move` | Move a member to a voice channel | Move Members |
+| `/mute` `/deafen` | Server mute or deafen a member | Mute/Deafen Members |
+
+### Info and text tools
+| Command | What it does |
+| --- | --- |
+| `/about` | Version, command count and source link |
+| `/servericon` `/banner` | Full-size server icon or a user's profile banner |
+| `/timestamp` | Discord timestamp from `now` or unix time, in four formats |
+| `/snowflake` | When a Discord ID was created |
+| `/myperms` | Your permissions in this server, spelled out |
+| `/pins` | Pinned messages with jump links |
+| `/inviteinfo` | Server, channel, uses and expiry of an invite |
+| `/password` | Random password (8-64 chars), ephemeral |
+| `/uuid` | Random UUID v4 |
+| `/hash` | MD5, SHA-1 or SHA-256 of some text |
+| `/url` | URL encode or decode |
+| `/case` | upper, lower, title or swap |
+| `/wordcount` | Characters, words, lines |
 
 Every moderation command checks the invoker's permissions first and explains
 Discord's refusal (403 role hierarchy, missing permission, unknown user).
@@ -104,6 +131,11 @@ Discord's refusal (403 role hierarchy, missing permission, unknown user).
 | `/joke` `/fact` `/quote` | Random output from built-in lists |
 | `/rate` | Rate something out of 100 |
 | `/reverse` | Reverse text |
+| `/fortune` | Fortune cookie |
+| `/compliment` | Compliment yourself or someone else |
+| `/hug` `/pat` | Social actions with mentions |
+| `/clap` | 👏 between 👏 every 👏 word |
+| `/spoiler` | Hide text behind ||spoiler tags|| |
 
 ### Roblox
 | Command | What it does |
@@ -112,6 +144,7 @@ Discord's refusal (403 role hierarchy, missing permission, unknown user).
 | `/roblox avatar <username>` | Full-body avatar render |
 | `/roblox game <universe_id>` | Name, creator, playing, visits, favourites, icon |
 | `/roblox group <group_id>` | Name, owner, member count, description, icon |
+| `/roblox games <username>` | A user's public games with visit counts and links |
 
 These use the public Roblox endpoints (`users.roblox.com`, `games.roblox.com`,
 `groups.roblox.com`, `friends.roblox.com`, `thumbnails.roblox.com`) with no key.
@@ -129,9 +162,14 @@ web URL parameters. Roblox lookups can be switched off in Settings.
 Example: `/custom add name:hello response:Hi {user}, welcome to {channel}!`
 then anybody can run `/hello`. Names are lowercase letters, numbers, `-` and `_`,
 up to 32 characters; built-in names are reserved; responses are capped at 1500
-characters; up to 40 custom commands. They are stored on the phone and
+characters; up to 20 custom commands. They are stored on the phone and
 re-registered in every server automatically (Discord can take a few seconds to
 show them).
+
+The same commands can be built without leaving the app: **Settings → Custom
+commands** has a name field, a response field and **Add command**, and every
+saved command has a **Remove** button. The cap is 20 because Discord allows 100
+commands per server and BotDroid already registers 80 built-ins.
 
 ## Settings
 
@@ -143,7 +181,8 @@ The **Settings** button on the main screen opens:
   running bot immediately through a gateway presence update; leaving the text
   empty shows no activity. `/botinfo` also reports the active status.
 - **Roblox integration** — turn `/roblox` on or off.
-- **Custom commands** — count, list, and clear all of them.
+- **Custom commands** — the command builder (name + response + **Add command**),
+  the saved list with per-command **Remove**, and **Clear custom commands**.
 - **Re-register commands in Discord** — useful if Discord is showing a stale list.
 - **Forget token and stop** — clears the stored token and stops the bot.
 - Link to this repository.
@@ -183,24 +222,29 @@ handler payloads can be checked without a token:
 ```
 
 It covers all handlers (permission gates, REST paths, request bodies, embeds),
-the 50 command definitions and their subcommands, the maths parser, the custom
-command store, the Roblox toggle and every presence payload shape (playing,
-listening, watching, competing, custom status, empty activity, invalid values).
+the 80 command definitions and their subcommands, the maths parser, the custom
+command store and its 20-command limit, the Roblox toggle and every presence
+payload shape (playing, listening, watching, competing, custom status, empty
+activity, invalid values). 143 checks in total.
 `tools/` is not compiled into the APK.
 
 ## How it works
 
 ```
 app/src/main/java/dev/botdroid/app/
-  MainActivity.java     token entry, start/stop, live log
-  SettingsActivity.java bot status, Roblox toggle, custom commands, token reset
+  MainActivity.java     token entry, start/stop, live log, entrance animation
+  SettingsActivity.java bot status, Roblox toggle, command builder, token reset
+  Store.java            loads prefs into memory, persists custom commands
   BotPresence.java      activity/status model and gateway presence payload
   BotService.java       foreground service, notification, wake lock
   DiscordBot.java       gateway loop, heartbeats, command registration
-  Commands.java         50 command definitions, dispatch, core handlers
+  Commands.java         80 command definitions, dispatch, core handlers
   CommandsUtil.java     utility commands and the maths parser
+  CommandsInfo.java     info, text and invite commands
+  CommandsAdmin.java    role, channel and voice commands
   CommandsMod.java      extra moderation commands
   CommandsFun.java      fun commands
+  CommandsFun2.java     social and text fun commands
   CommandsRoblox.java   /roblox handlers
   CommandsCustom.java   /custom handlers and placeholder rendering
   CustomCommands.java    custom command store (persisted to prefs)

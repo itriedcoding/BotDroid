@@ -3,21 +3,28 @@ package dev.botdroid.app;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.graphics.Typeface;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.List;
+import java.util.Locale;
 
 public class SettingsActivity extends Activity {
 
     private Switch robloxSwitch;
-    private TextView customList;
+    private LinearLayout customList;
     private TextView customCount;
+    private EditText customNameInput;
+    private EditText customResponseInput;
+    private TextView customBuilderStatus;
     private TextView refreshButton;
     private Spinner presenceType;
     private EditText presenceText;
@@ -29,9 +36,14 @@ public class SettingsActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
+        Store.init(this);
+
         robloxSwitch = findViewById(R.id.roblox_switch);
         customList = findViewById(R.id.custom_list);
         customCount = findViewById(R.id.custom_count);
+        customNameInput = findViewById(R.id.custom_name_input);
+        customResponseInput = findViewById(R.id.custom_response_input);
+        customBuilderStatus = findViewById(R.id.custom_builder_status);
         refreshButton = findViewById(R.id.refresh_button);
         presenceType = findViewById(R.id.presence_type);
         presenceText = findViewById(R.id.presence_text);
@@ -54,6 +66,8 @@ public class SettingsActivity extends Activity {
             Prefs.robloxEnabled(this, checked);
             LogBus.log("Roblox commands " + (checked ? "enabled" : "disabled"));
         });
+
+        findViewById(R.id.add_custom_button).setOnClickListener(view -> addCustomCommand());
 
         findViewById(R.id.clear_custom_button).setOnClickListener(view -> {
             if (CustomCommands.count() == 0) {
@@ -147,17 +161,71 @@ public class SettingsActivity extends Activity {
 
     private void refreshUi() {
         customCount.setText(getString(R.string.custom_count, CustomCommands.count()));
+        refreshCustomList();
+        refreshButton.setEnabled(BotService.isRunning());
+    }
+
+    private void refreshCustomList() {
+        customList.removeAllViews();
         List<String> names = CustomCommands.names();
         if (names.isEmpty()) {
-            customList.setText(R.string.custom_empty);
-        } else {
-            StringBuilder builder = new StringBuilder();
-            for (String name : names) {
-                builder.append('/').append(name).append("   ");
-            }
-            customList.setText(builder.toString().trim());
+            TextView empty = new TextView(this);
+            empty.setText(R.string.custom_empty);
+            empty.setTextColor(getColor(R.color.muted));
+            empty.setTextSize(12);
+            customList.addView(empty);
+            return;
         }
-        refreshButton.setEnabled(BotService.isRunning());
+        for (String name : names) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, dp(4), 0, dp(4));
+
+            TextView label = new TextView(this);
+            label.setText("/" + name);
+            label.setTextColor(getColor(R.color.log));
+            label.setTextSize(13);
+            label.setTypeface(Typeface.MONOSPACE);
+            label.setLayoutParams(new LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView remove = new TextView(this);
+            remove.setText(R.string.custom_remove);
+            remove.setTextColor(getColor(R.color.accent));
+            remove.setTextSize(12);
+            remove.setPadding(dp(10), dp(6), dp(2), dp(6));
+            remove.setOnClickListener(view -> {
+                CustomCommands.remove(name);
+                LogBus.log("Custom command removed from the app: /" + name);
+                refreshUi();
+            });
+
+            row.addView(label);
+            row.addView(remove);
+            customList.addView(row);
+        }
+    }
+
+    private void addCustomCommand() {
+        String name = customNameInput.getText().toString().toLowerCase(Locale.US).trim().replace(' ', '-');
+        String response = customResponseInput.getText().toString().trim();
+        String error = CustomCommands.add(name, response);
+        if (error != null) {
+            customBuilderStatus.setText(error);
+            return;
+        }
+        customNameInput.setText("");
+        customResponseInput.setText("");
+        customBuilderStatus.setText(BotService.isRunning()
+                ? "Added /" + name + " — registering it in Discord now."
+                : "Added /" + name + ". It is registered when the bot starts.");
+        LogBus.log("Custom command added from the app: /" + name);
+        refreshUi();
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private void toast(String message) {

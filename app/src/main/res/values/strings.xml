@@ -14,7 +14,6 @@
     <string name="roblox_title">Roblox integration</string>
     <string name="roblox_desc">/roblox looks up Roblox users, avatars, games and groups using the public Roblox API.</string>
     <string name="custom_title">Custom commands</string>
-    <string name="custom_empty">None yet. In Discord run /custom add name response.</string>
     <string name="custom_count">%1$d saved</string>
     <string name="clear_custom">Clear custom commands</string>
     <string name="presence_title">Bot status</string>
@@ -26,4 +25,11 @@
     <string name="forget_token">Forget token and stop</string>
     <string name="github_link">github.com/itriedcoding/BotDroid</string>
     <string name="settings_button">Settings</string>
+    <string name="intro_tagline">DISCORD BOT · ON YOUR PHONE</string>
+    <string name="custom_builder_label">BUILD A COMMAND</string>
+    <string name="custom_name_hint">Command name, e.g. rules</string>
+    <string name="custom_response_hint">What it replies with. {user} mentions the caller</string>
+    <string name="custom_add">Add command</string>
+    <string name="custom_remove">Remove</string>
+    <string name="custom_empty">None yet. Build one below, or use /custom add in Discord.</string>
 </resources>

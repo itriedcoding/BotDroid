@@ -18,7 +18,8 @@ final class CustomCommands {
         void save(String json);
     }
 
-    static final int MAX = 40;
+    // Discord allows 100 guild commands per server; 80 built-ins leave room for 20.
+    static final int MAX = 20;
     static final int MAX_RESPONSE = 1500;
 
     private static final LinkedHashMap<String, String> COMMANDS = new LinkedHashMap<>();

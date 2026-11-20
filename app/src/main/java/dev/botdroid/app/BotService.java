@@ -75,16 +75,7 @@ public class BotService extends Service {
     public void onCreate() {
         super.onCreate();
         createChannel();
-        BotState.robloxEnabled = Prefs.robloxEnabled(this);
-        Prefs.loadPresence(this);
-        CustomCommands.load(Prefs.customCommands(this));
-        CustomCommands.setSaver(json -> Prefs.customCommands(getApplicationContext(), json));
-        CustomCommands.setOnChange(() -> {
-            DiscordBot bot = current;
-            if (bot != null) {
-                bot.refreshCommands();
-            }
-        });
+        Store.init(this);
     }
 
     @Override

@@ -121,6 +121,13 @@ final class RobloxApi {
         return data.optJSONObject(0);
     }
 
+    static JSONArray userGames(long userId) throws ApiException {
+        JSONObject result = get("games.roblox.com", "/v2/users/" + userId
+                + "/games?accessFilter=Public&limit=10&sortOrder=Desc");
+        JSONArray data = result.optJSONArray("data");
+        return data == null ? new JSONArray() : data;
+    }
+
     static String gameIcon(long universeId) {
         return thumbnail("https://thumbnails.roblox.com/v1/games/icons?universeIds=" + universeId
                 + "&size=512x512&format=Png&isCircular=false");

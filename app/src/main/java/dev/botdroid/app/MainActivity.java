@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ScrollView;
@@ -28,6 +29,7 @@ public class MainActivity extends Activity implements LogBus.Listener {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        Store.init(this);
 
         tokenInput = findViewById(R.id.token_input);
         actionButton = findViewById(R.id.action_button);
@@ -65,6 +67,68 @@ public class MainActivity extends Activity implements LogBus.Listener {
             appendLine(line);
         }
         statusView.setText(LogBus.status());
+        playEntrance();
+    }
+
+    /** Fades the intro wordmark out and brings the screen in piece by piece. */
+    private void playEntrance() {
+        View overlay = findViewById(R.id.intro_overlay);
+        View introLogo = findViewById(R.id.intro_logo);
+        if (overlay == null || introLogo == null) {
+            return;
+        }
+        if (animationsDisabled()) {
+            overlay.setVisibility(View.GONE);
+            return;
+        }
+        View[] staged = {
+                findViewById(R.id.header),
+                findViewById(R.id.token_card),
+                actionButton,
+                statusView,
+                logScroll
+        };
+        for (View view : staged) {
+            if (view != null) {
+                view.setAlpha(0f);
+                view.setTranslationY(dp(22));
+            }
+        }
+        introLogo.setAlpha(0f);
+        introLogo.setScaleX(0.82f);
+        introLogo.setScaleY(0.82f);
+        introLogo.animate().alpha(1f).scaleX(1f).scaleY(1f)
+                .setDuration(460).setInterpolator(new DecelerateInterpolator()).start();
+        overlay.animate().alpha(0f).setStartDelay(760).setDuration(420)
+                .withEndAction(new Runnable() {
+                    @Override
+                    public void run() {
+                        overlay.setVisibility(View.GONE);
+                    }
+                }).start();
+        for (int i = 0; i < staged.length; i++) {
+            View view = staged[i];
+            if (view == null) {
+                continue;
+            }
+            view.animate().alpha(1f).translationY(0f)
+                    .setStartDelay(400 + i * 80L).setDuration(480)
+                    .setInterpolator(new DecelerateInterpolator()).start();
+        }
+    }
+
+    private boolean animationsDisabled() {
+        try {
+            float scale = android.provider.Settings.Global.getFloat(getContentResolver(),
+                    android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f);
+            return scale == 0f;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     @Override

@@ -20,7 +20,8 @@ final class CommandsRoblox {
         String sub = Commands.subcommandName(interaction);
         if (sub == null) {
             Commands.respond(rest, interaction,
-                    "Use `/roblox user`, `/roblox avatar`, `/roblox game` or `/roblox group`.", true, null);
+                    "Use `/roblox user`, `/roblox avatar`, `/roblox game`, `/roblox group` or `/roblox games`.",
+                    true, null);
             return;
         }
         try {
@@ -32,6 +33,8 @@ final class CommandsRoblox {
                 game(rest, interaction);
             } else if ("group".equals(sub)) {
                 group(rest, interaction);
+            } else if ("games".equals(sub)) {
+                games(rest, interaction);
             } else {
                 Commands.respond(rest, interaction, "Unknown Roblox lookup.", true, null);
             }
@@ -147,6 +150,45 @@ final class CommandsRoblox {
         if (icon != null) {
             embed.put("thumbnail", new JSONObject().put("url", icon));
         }
+        Commands.respond(rest, interaction, "", true, new JSONArray().put(embed));
+    }
+
+    private static void games(DiscordRest rest, JSONObject interaction) throws Exception {
+        String username = Commands.optString(interaction, "username");
+        if (username == null || username.trim().isEmpty()) {
+            Commands.respond(rest, interaction, "Give me a Roblox username.", true, null);
+            return;
+        }
+        long id = RobloxApi.findUserId(username.trim());
+        if (id <= 0) {
+            Commands.respond(rest, interaction, "No Roblox user named **" + username.trim() + "**.", true, null);
+            return;
+        }
+        JSONArray data = RobloxApi.userGames(id);
+        if (data.length() == 0) {
+            Commands.respond(rest, interaction,
+                    "**" + username.trim() + "** has no public games.", true, null);
+            return;
+        }
+        StringBuilder description = new StringBuilder();
+        int shown = 0;
+        for (int i = 0; i < data.length() && shown < 10; i++) {
+            JSONObject game = data.optJSONObject(i);
+            if (game == null) {
+                continue;
+            }
+            String name = game.optString("name", "Untitled");
+            String placeId = game.optString("rootPlaceId", "");
+            if (placeId.isEmpty() || "null".equals(placeId)) {
+                description.append("• ").append(name);
+            } else {
+                description.append("• [").append(name).append("](https://www.roblox.com/games/")
+                        .append(placeId).append(')');
+            }
+            description.append(" — ").append(game.optLong("placeVisits", 0)).append(" visits\n");
+            shown++;
+        }
+        JSONObject embed = Commands.embed(username.trim() + "'s games", 0xE2231A, description.toString());
         Commands.respond(rest, interaction, "", true, new JSONArray().put(embed));
     }
 
