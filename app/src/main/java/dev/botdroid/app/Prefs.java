@@ -18,6 +18,7 @@ final class Prefs {
     private static final String KEY_AUTOSTART = "autostart";
     private static final String KEY_VARIABLES = "script_variables";
     private static final String KEY_WARNINGS = "warnings";
+    private static final String KEY_AUTOMATION = "automation";
     private static final String KEY_UPDATE_CHECK = "update_checked_at";
     private static final String KEY_UPDATE_TAG = "update_tag";
 
@@ -133,6 +134,18 @@ final class Prefs {
     static String lastUpdateTag(Context context) {
         String value = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_UPDATE_TAG, "");
         return value == null ? "" : value;
+    }
+
+    static String automation(Context context) {
+        String value = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_AUTOMATION, "");
+        return value == null ? "" : value;
+    }
+
+    static void automation(Context context, String json) {
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_AUTOMATION, json)
+                .apply();
     }
 
     static String customCommands(Context context) {

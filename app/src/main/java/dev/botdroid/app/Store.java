@@ -36,6 +36,8 @@ final class Store {
         Variables.setSaver(json -> Prefs.variables(app, json));
         Warnings.load(Prefs.warnings(app));
         Warnings.setSaver(json -> Prefs.warnings(app, json));
+        Automation.load(Prefs.automation(app));
+        Automation.setSaver(json -> Prefs.automation(app, json));
         DeviceProbe.attach(app);
     }
 }

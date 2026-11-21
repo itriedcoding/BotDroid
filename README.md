@@ -1,10 +1,11 @@
 # BotDroid
 
 A Discord bot that runs **on your phone**. Paste a bot token, press Start, and
-120 built-in slash commands are ready for every server the bot is in (91 on by
-default, the other 29 one switch away) — plus Roblox lookups, a Bot
-Designer–style **bot builder** with its own script language, `/status` for the
-phone the bot runs on, a rich presence page and a settings screen.
+123 built-in slash commands are ready for every server the bot is in (94 on by
+default, the other 29 one switch away) — plus reaction roles, repeating
+messages and giveaways, Roblox lookups, a Bot Designer–style **bot builder**
+with its own script language, `/status` for the phone the bot runs on, a rich
+presence page and a settings screen.
 No server, no hosting, no third-party libraries: the APK stays tiny.
 
 ## What it does
@@ -19,6 +20,15 @@ No server, no hosting, no third-party libraries: the APK stays tiny.
   test run, saved list) with a BDScript-style language: `$mention`, `$args`,
   `$upper[x]`, `$if[...]{...}`, `$setUserVar[name;value]` and about 60 more
   functions. `/custom functions` documents them in Discord too.
+- **Reaction roles**: `/reactionrole add` pairs an emoji on a real message with
+  a role. Reacting gives the role, un-reacting takes it back, and the bot adds
+  the reaction for you so members have something to click.
+- **Repeating messages**: `/schedule add` posts a channel announcement every N
+  minutes, up to a week apart, with `/schedule run` for testing it now.
+- **Giveaways**: `/giveaway start` posts an entry message, then reacts, counts
+  the human entries and announces the winner(s) when the timer ends. `/giveaway
+  end` closes early, `/giveaway reroll` picks a new winner from the same
+  reactions.
 - **Roblox lookups** through the public Roblox API: users, avatars, games, groups.
 - **Per-command switches**: Settings → Commands lists every built-in with a
   toggle. Off commands are not registered and free a slot for a custom command.
@@ -54,7 +64,11 @@ No server, no hosting, no third-party libraries: the APK stays tiny.
 5. Type `/help` in your server. Commands are registered per server, so they show
    up immediately.
 
-BotDroid needs only the `GUILDS` intent, so no privileged intents are required.
+BotDroid asks for `GUILDS` and `GUILD_MESSAGE_REACTIONS` and nothing else. Both
+are standard intents, so there is nothing to switch on in the Developer Portal
+and no application review. (Welcome messages would need the privileged Guild
+Members intent, which would stop the bot from connecting for every new user who
+has not enabled it — that is why BotDroid does not offer them.)
 
 ## Commands
 
@@ -176,6 +190,18 @@ BotDroid needs only the `GUILDS` intent, so no privileged intents are required.
 Warnings live on the phone, in the app's private storage, up to 2000 entries —
 the bot has no database server of its own, and the command says so.
 
+### Server automation
+| Command | What it does | Permission |
+| --- | --- | --- |
+| `/reactionrole add` | Pair an emoji on a message with a role; react to get it | Manage Roles |
+| `/reactionrole remove` `/reactionrole clear` | Delete one pairing, or every pairing | Manage Roles |
+| `/reactionrole list` | Every pairing in this server | Manage Roles |
+| `/schedule add` | Repeat a message in a channel every N minutes | Manage Server |
+| `/schedule list` `/schedule remove` `/schedule run` | Show them, delete one, or post one now | Manage Server |
+| `/giveaway start` | Post a giveaway with a 🎉 entry reaction and an end time | Manage Server |
+| `/giveaway end` `/giveaway reroll` | Close it now, or draw a new winner | Manage Server |
+| `/giveaway list` | Running and finished giveaways | Manage Server |
+
 ### Text tools 2
 | Command | What it does |
 | --- | --- |
@@ -276,16 +302,42 @@ mode, and it never posts anything to Discord.
 
 ### How the 100 command slots are shared
 
-BotDroid ships **120 built-in commands**, but Discord allows **100 per server**,
+BotDroid ships **123 built-in commands**, but Discord allows **100 per server**,
 counting built-ins and your own together, so the custom limit is
-`100 − enabled built-ins` rather than a fixed number. **91** are on by default;
+`100 − enabled built-ins` rather than a fixed number. **94** are on by default;
 the other **29** are niche or specialised (`/dm`, `/announce`, `/auditlog`,
-`/warn`, `/mock`, `/hex`, …) and start switched off, which leaves room for nine
+`/warn`, `/mock`, `/hex`, …) and start switched off, which leaves room for six
 custom commands on a fresh install. Turn built-ins off in **Settings → Commands**
 to free more, or on if you need them — that page lists every command with a
 switch plus **Turn all on** / **Turn all off**. `/commandcount` shows the current
 split, and if a server ever exceeds 100 the app keeps your custom commands and
 logs which built-ins were skipped.
+
+## Server automation
+
+Three commands make BotDroid behave like an ordinary utility bot in a small
+server, and none of them needs a privileged intent:
+
+- **Reaction roles.** `/reactionrole add message_id emoji role` makes the bot
+  react to that message itself, then gives `<@&role>` to whoever reacts and
+  takes it back when they un-react. The gateway's `MESSAGE_REACTION_ADD` and
+  `MESSAGE_REACTION_REMOVE` events drive it, so nothing has to be switched on in
+  the Developer Portal. The bot's own role has to sit above the role it hands
+  out; a refusal is logged with Discord's reason.
+- **Repeating messages.** `/schedule add channel text minutes` posts the text
+  every N minutes (5 to 10080). `/schedule list` shows the next fire time and
+  `/schedule run` posts one immediately and restarts the timer.
+- **Giveaways.** `/giveaway start channel prize minutes [winners]` posts the
+  entry embed and adds the 🎉 reaction. When the time is up the bot reads the
+  people who reacted (bots excluded), picks the winner(s) at random and
+  announces them. `/giveaway end` closes early and `/giveaway reroll` draws
+  again from the same reactions.
+
+Settings for all three live on the phone, per server, in the app's private
+storage. The giveaway and schedule timers run inside the bot service, so they
+fire only while BotDroid is running — which is every moment the phone is on with
+Start on boot enabled. A message that came due while the phone was off is sent
+once when the bot reconnects, not once for every missed interval.
 
 ## Settings
 
@@ -420,7 +472,10 @@ the Roblox toggle, every presence payload shape (playing, streaming with and
 without a URL, listening, watching, competing, custom status, state lines,
 empty activity, invalid values), `/status` with a canned device, the warnings
 store and the script language (nesting, arguments, `$if`/`$else`, variables,
-`$onlyPerms`, escapes, error reporting). 235 checks in total.
+`$onlyPerms`, escapes, error reporting), the reaction-role store and the role
+it grants on a reaction, the schedule timer (due, early, missed runs, immediate
+run, removal) and the giveaway cycle (entry reaction, closing, bot entries
+ignored, no re-fire, refusal without Add Reactions). 276 checks in total.
 `tools/` is not compiled into the APK.
 
 ## How it works
@@ -435,6 +490,8 @@ app/src/main/java/dev/botdroid/app/
   Script.java           the $function script language (parser and evaluator)
   Variables.java        global / per-user / per-server script variables
   Warnings.java         warnings issued with /warn, stored on the phone
+  Automation.java       reaction roles, repeating messages and giveaways, stored on the phone
+  CommandsAutomation.java  /reactionrole, /schedule and /giveaway handlers
   DeviceInfo.java       device snapshot model and formatting for /status
   DeviceProbe.java      reads Build, battery, network, memory and storage
   BootReceiver.java     restarts the bot after a reboot

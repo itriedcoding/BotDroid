@@ -91,6 +91,9 @@ final class Commands {
             + "__Text tools 2__\n"
             + "`/mock` `/rot13` `/caesar` `/sortlines` `/dedupe` `/hex` `/charinfo` `/repeat` `/embed` "
             + "`/weekday` `/percentage`\n"
+            + "__Automation__\n"
+            + "`/reactionrole add|remove|list|clear` `/schedule add|list|remove|run` "
+            + "`/giveaway start|list|end|reroll`\n"
             + "__Roblox__\n"
             + "`/roblox user|avatar|game|group|games`\n"
             + "__Custom and the bot builder__\n"
@@ -390,6 +393,17 @@ final class Commands {
         } catch (Exception ignored) {
             // skip
         }
+        try {
+            JSONArray automation = new JSONArray(CommandsAutomation.DEFINITIONS);
+            for (int i = 0; i < automation.length(); i++) {
+                JSONObject entry = automation.optJSONObject(i);
+                if (entry != null) {
+                    merged.put(entry);
+                }
+            }
+        } catch (Exception ignored) {
+            // skip
+        }
         return merged;
     }
 
@@ -676,6 +690,12 @@ final class Commands {
                 CommandsExtra.weekday(rest, interaction);
             } else if ("percentage".equals(name)) {
                 CommandsExtra.percentage(rest, interaction);
+            } else if ("reactionrole".equals(name)) {
+                CommandsAutomation.reactionRole(rest, interaction);
+            } else if ("schedule".equals(name)) {
+                CommandsAutomation.schedule(rest, interaction);
+            } else if ("giveaway".equals(name)) {
+                CommandsAutomation.giveaway(rest, interaction);
             } else {
                 String custom = CustomCommands.response(name);
                 if (custom != null) {

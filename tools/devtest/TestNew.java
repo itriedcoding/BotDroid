@@ -39,6 +39,7 @@ public final class TestNew {
         scripts();
         customScripts();
         toggles();
+        automation();
         System.out.println();
         System.out.println("new: " + passed + " passed, " + failed + " failed");
         if (failed > 0) {
@@ -402,9 +403,9 @@ public final class TestNew {
         CustomCommands.load("[]");
         CommandToggles.loadDefaults();
         int defaultLimit = 100 - CommandToggles.enabledCount();
-        check("defaults keep 91 built-ins on", CommandToggles.enabledCount() == 91,
+        check("defaults keep 94 built-ins on", CommandToggles.enabledCount() == 94,
                 "enabled=" + CommandToggles.enabledCount());
-        check("defaults leave nine custom slots", defaultLimit == 9, "free=" + defaultLimit);
+        check("defaults leave six custom slots", defaultLimit == 6, "free=" + defaultLimit);
         check("every default-off name is a real command", everyDefaultOffExists(),
                 CommandToggles.DEFAULT_OFF.toString());
         check("default-off commands are off", !CommandToggles.isEnabled("dm")
@@ -1310,6 +1311,210 @@ public final class TestNew {
 
         CustomCommands.load("[]");
         CustomCommands.remove("greet");
+    }
+
+    private static JSONObject subInteraction(String command, String sub, String guild, String channel,
+                                             long permissions, JSONObject... options) throws Exception {
+        JSONArray subOptions = new JSONArray();
+        for (JSONObject option : options) {
+            subOptions.put(option);
+        }
+        JSONObject subOption = new JSONObject().put("name", sub).put("type", 1).put("options", subOptions);
+        JSONObject data = new JSONObject().put("name", command).put("options", new JSONArray().put(subOption));
+        return wrap(data, guild, channel, permissions);
+    }
+
+    private static void automation() throws Exception {
+        CustomCommands.load("[]");
+        CommandToggles.loadDefaults();
+        Automation.load("[]");
+        Automation.setSaver(json -> { });
+        Automation.Logger quiet = line -> { };
+
+        JSONArray defs = Commands.definitions();
+        check("reactionrole subcommands", subNames(defs, "reactionrole").toString()
+                .equals("[add, remove, list, clear]"), subNames(defs, "reactionrole").toString());
+        check("schedule subcommands", subNames(defs, "schedule").toString()
+                .equals("[add, list, remove, run]"), subNames(defs, "schedule").toString());
+        check("giveaway subcommands", subNames(defs, "giveaway").toString()
+                .equals("[start, list, end, reroll]"), subNames(defs, "giveaway").toString());
+
+        check("emoji key drops the variation selector", "⭐".equals(Automation.emojiKey("⭐️")),
+                Automation.emojiKey("⭐️"));
+        check("emoji key of a custom emoji", "party:123".equals(Automation.emojiKey("<:party:123>")),
+                Automation.emojiKey("<:party:123>"));
+        check("emoji key of an animated emoji", "dance:456".equals(Automation.emojiKey("<a:dance:456>")),
+                Automation.emojiKey("<a:dance:456>"));
+        check("emoji key from the gateway", "🎉".equals(Automation.emojiKey(
+                new JSONObject().put("name", "🎉").put("id", JSONObject.NULL))),
+                Automation.emojiKey(new JSONObject().put("name", "🎉").put("id", JSONObject.NULL)));
+        check("reaction path is encoded", "%F0%9F%8E%89".equals(Automation.reactionPath("🎉")),
+                Automation.reactionPath("🎉"));
+
+        DiscordRest rest = new DiscordRest("t");
+        Commands.handle(rest, subInteraction("reactionrole", "add", "G", "C", 0,
+                stringOption("message_id", "1001"), stringOption("emoji", "🎉"), roleOption("role", "2002")));
+        check("reactionrole needs Manage Roles", contains(content(rest), "Manage Roles"), content(rest));
+        check("reactionrole makes no call when blocked", rest.lastNonCallback() == null, "unexpected call");
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, subInteraction("reactionrole", "add", "G", "C", Commands.MANAGE_ROLES,
+                stringOption("message_id", "1001"), stringOption("emoji", "🎉"), roleOption("role", "2002")));
+        DiscordRest.Call call = rest.lastNonCallback();
+        check("reactionrole reacts as the bot", call != null && "PUT".equals(call.method)
+                && "/channels/C/messages/1001/reactions/%F0%9F%8E%89/@me".equals(call.path),
+                call == null ? "no call" : call.method + " " + call.path);
+        check("reactionrole stored", Automation.reactionRole("G", "1001", "🎉") != null, "not stored");
+        check("reactionrole reply names the role", contains(content(rest), "<@&2002>"), content(rest));
+
+        String saved = Automation.json();
+        Automation.load(saved);
+        check("automation survives a reload", Automation.reactionRole("G", "1001", "🎉") != null, saved);
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, subInteraction("reactionrole", "add", "G", "C", Commands.MANAGE_ROLES,
+                stringOption("message_id", "1001"), stringOption("emoji", "🎉"), roleOption("role", "2002")));
+        check("reactionrole refuses a duplicate", contains(content(rest), "already gives a role"),
+                content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, subInteraction("reactionrole", "list", "G", "C", Commands.MANAGE_ROLES));
+        check("reactionrole list shows it", contains(embedDescription(rest), "<@&2002>"),
+                embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        JSONObject reactionEvent = new JSONObject().put("user_id", "42").put("guild_id", "G")
+                .put("message_id", "1001").put("channel_id", "C")
+                .put("emoji", new JSONObject().put("name", "🎉").put("id", JSONObject.NULL));
+        Automation.onReaction(rest, reactionEvent, true, "999", quiet);
+        call = rest.lastNonCallback();
+        check("reacting gives the role", call != null && "PUT".equals(call.method)
+                && "/guilds/G/members/42/roles/2002".equals(call.path),
+                call == null ? "no call" : call.method + " " + call.path);
+
+        rest = new DiscordRest("t");
+        Automation.onReaction(rest, reactionEvent, false, "999", quiet);
+        call = rest.lastNonCallback();
+        check("un-reacting takes the role back", call != null && "DELETE".equals(call.method)
+                && "/guilds/G/members/42/roles/2002".equals(call.path),
+                call == null ? "no call" : call.method + " " + call.path);
+
+        rest = new DiscordRest("t");
+        Automation.onReaction(rest, reactionEvent, true, "42", quiet);
+        check("the bot ignores its own reaction", rest.calls.isEmpty(), "unexpected call");
+
+        final List<String> logged = new ArrayList<>();
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> new Net.Resp(403, "{\"message\":\"Missing Permissions\"}");
+        Automation.onReaction(rest, reactionEvent, true, "999", logged::add);
+        check("a refused role change is explained", logged.size() == 1 && contains(logged.get(0), "Manage Roles"),
+                String.valueOf(logged));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, subInteraction("reactionrole", "remove", "G", "C", Commands.MANAGE_ROLES,
+                stringOption("message_id", "1001"), stringOption("emoji", "🎉")));
+        check("reactionrole removed", Automation.reactionRole("G", "1001", "🎉") == null, "still stored");
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, subInteraction("schedule", "add", "G", "C", Commands.MANAGE_GUILD,
+                channelOption("channel", "CH"), stringOption("text", "Daily standup"),
+                intOption("minutes", 60)));
+        check("schedule stored", Automation.schedules("G").size() == 1, "not stored");
+        check("schedule reply shows the cadence", contains(content(rest), "every **60 minutes**"),
+                content(rest));
+
+        Automation.Schedule stored = Automation.schedules("G").get(0);
+        long firstRun = stored.next;
+        check("schedule waits a full interval", firstRun > System.currentTimeMillis() + 59L * 60000L,
+                "next=" + firstRun);
+
+        rest = new DiscordRest("t");
+        check("tick does nothing early", Automation.tick(rest, firstRun - 1000L, quiet) == 0, "posted early");
+
+        rest = new DiscordRest("t");
+        int actions = Automation.tick(rest, firstRun + 1000L, quiet);
+        call = rest.lastNonCallback();
+        check("tick posts the due message", actions == 1 && call != null && "POST".equals(call.method)
+                && "/channels/CH/messages".equals(call.path),
+                call == null ? "no call" : call.method + " " + call.path);
+        check("scheduled body carries the text", call != null && call.body.contains("Daily standup"),
+                call == null ? "no call" : call.body);
+        check("tick moves the timer on", Automation.schedules("G").get(0).next > firstRun, "timer stuck");
+        check("a late phone does not flood the channel",
+                Automation.advance(firstRun, 60, firstRun + 5L * 3600000L) > firstRun + 5L * 3600000L,
+                "advance kept a past time");
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, subInteraction("schedule", "run", "G", "C", Commands.MANAGE_GUILD,
+                intOption("id", 1)));
+        check("schedule run posts immediately", contains(content(rest), "Posted **#1**"), content(rest));
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, subInteraction("schedule", "remove", "G", "C", Commands.MANAGE_GUILD,
+                intOption("id", 1)));
+        check("schedule removed", Automation.schedules("G").isEmpty(), "still stored");
+
+        Automation.load("[]");
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "POST".equals(m) && p.startsWith("/channels/CH/messages")
+                ? new Net.Resp(200, "{\"id\":\"MSG9\"}") : null;
+        Commands.handle(rest, subInteraction("giveaway", "start", "G", "C", Commands.MANAGE_GUILD,
+                channelOption("channel", "CH"), stringOption("prize", "Nitro"),
+                intOption("minutes", 10)));
+        check("giveaway stored", Automation.giveaways("G").size() == 1, "not stored");
+        boolean reacted = false;
+        for (DiscordRest.Call entry : rest.calls) {
+            if ("PUT".equals(entry.method)
+                    && "/channels/CH/messages/MSG9/reactions/%F0%9F%8E%89/@me".equals(entry.path)) {
+                reacted = true;
+            }
+        }
+        check("giveaway adds the entry reaction", reacted, "no reaction call");
+        check("giveaway reply numbers it", contains(content(rest), "#1"), content(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "GET".equals(m) && p.contains("/reactions/")
+                ? new Net.Resp(200, "[{\"id\":\"7\",\"bot\":false},{\"id\":\"8\",\"bot\":true},"
+                + "{\"id\":\"9\",\"bot\":false}]")
+                : ("POST".equals(m) ? new Net.Resp(200, "{\"id\":\"ANN\"}") : null);
+        int ended = Automation.tick(rest, System.currentTimeMillis() + 11L * 60000L, quiet);
+        DiscordRest.Call announce = null;
+        for (DiscordRest.Call entry : rest.calls) {
+            if ("POST".equals(entry.method)) {
+                announce = entry;
+            }
+        }
+        check("giveaway closes when the timer runs out",
+                ended == 1 && Automation.findGiveaway("G", 1).done, "not ended");
+        check("giveaway announces a member", announce != null
+                && (announce.body.contains("<@7>") || announce.body.contains("<@9>")),
+                announce == null ? "no announcement" : announce.body);
+        check("giveaway never picks a bot", announce != null && !announce.body.contains("<@8>"),
+                announce == null ? "no announcement" : announce.body);
+        List<String> won = Automation.findGiveaway("G", 1).won;
+        check("the announced winner is the recorded one", announce != null && won.size() == 1
+                && announce.body.contains("<@" + won.get(0) + ">"),
+                announce == null ? "no announcement" : announce.body + " / " + won);
+        check("a finished giveaway is not due again",
+                Automation.dueGiveaways(System.currentTimeMillis() + 600000L).isEmpty(), "still due");
+
+        rest = new DiscordRest("t");
+        Commands.handle(rest, subInteraction("giveaway", "list", "G", "C", Commands.MANAGE_GUILD));
+        check("giveaway list shows the result", contains(embedDescription(rest), "Nitro")
+                && contains(embedDescription(rest), "ended"), embedDescription(rest));
+
+        rest = new DiscordRest("t");
+        rest.responder = (m, p, b) -> "POST".equals(m) ? new Net.Resp(200, "{\"id\":\"MSGX\"}")
+                : new Net.Resp(403, "{\"message\":\"Missing Permissions\"}");
+        Commands.handle(rest, subInteraction("giveaway", "start", "G", "C", Commands.MANAGE_GUILD,
+                channelOption("channel", "CH"), stringOption("prize", "Nitro"),
+                intOption("minutes", 10)));
+        check("giveaway without its reaction is not saved", Automation.giveaways("G").size() == 1,
+                "stored anyway");
+        check("giveaway explains the missing permission", contains(content(rest), "Add Reactions"),
+                content(rest));
+
+        Automation.load("[]");
     }
 
     /** Stand-in bot for script tests: sample context plus real variable storage. */

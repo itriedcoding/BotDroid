@@ -23,6 +23,7 @@ cp "$SRC/Commands.java" "$SRC/CommandsUtil.java" "$SRC/CommandsMod.java" "$SRC/C
    "$SRC/CommandsInfo.java" "$SRC/CommandsAdmin.java" "$SRC/CommandsFun2.java" \
    "$SRC/CommandsMore.java" "$SRC/CommandsExtra.java" "$SRC/CommandToggles.java" \
    "$SRC/Script.java" "$SRC/Variables.java" "$SRC/DeviceInfo.java" "$SRC/Warnings.java" \
+   "$SRC/Automation.java" "$SRC/CommandsAutomation.java" \
    "$SRC/BotState.java" "$SRC/RobloxApi.java" "$SRC/BotPresence.java" "$WORK/dev/botdroid/app/"
 cp "$ROOT/tools/devtest/harness/"*.java "$WORK/dev/botdroid/app/"
 cp "$ROOT/tools/devtest/TestNew.java" "$WORK/dev/botdroid/app/"

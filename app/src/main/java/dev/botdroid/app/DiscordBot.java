@@ -9,7 +9,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Minimal Discord bot core: gateway connection, heartbeats, slash command
@@ -27,14 +29,17 @@ final class DiscordBot {
 
     private static final String GATEWAY_HOST = "gateway.discord.gg";
     private static final String GATEWAY_PATH = "/?v=10&encoding=json";
-    // GUILDS is enough: slash commands and guild metadata, no privileged intents.
-    private static final int INTENTS = 1;
+    // GUILDS plus GUILD_MESSAGE_REACTIONS: both are standard intents, so the
+    // bot connects with nothing to enable in the Developer Portal. The reaction
+    // bit is what lets /reactionrole see who reacted.
+    private static final int INTENTS = 1 | (1 << 10);
 
     private final String token;
     private final Listener listener;
     private final DiscordRest rest;
     private final ExecutorService workers;
     private final ExecutorService registrar;
+    private final ScheduledExecutorService timers;
 
     private volatile boolean running = true;
     private volatile boolean fatal = false;
@@ -61,9 +66,11 @@ final class DiscordBot {
         };
         this.workers = Executors.newFixedThreadPool(2, factory);
         this.registrar = Executors.newSingleThreadExecutor(factory);
+        this.timers = Executors.newSingleThreadScheduledExecutor(factory);
     }
 
     void start() {
+        startTimers();
         Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -83,6 +90,36 @@ final class DiscordBot {
         }
         workers.shutdownNow();
         registrar.shutdownNow();
+        timers.shutdownNow();
+    }
+
+    /**
+     * Runs the automation timer: due scheduled messages and giveaways whose end
+     * time has passed. It only acts while the gateway session is identified, so
+     * it never fires before the bot is actually online.
+     */
+    private void startTimers() {
+        if (timers.isShutdown()) {
+            return;
+        }
+        timers.scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                if (!running || !identified) {
+                    return;
+                }
+                try {
+                    Automation.tick(rest, System.currentTimeMillis(), new Automation.Logger() {
+                        @Override
+                        public void log(String line) {
+                            DiscordBot.this.log(line);
+                        }
+                    });
+                } catch (Exception e) {
+                    log("Automation timer failed: " + e.getMessage());
+                }
+            }
+        }, 20L, 30L, TimeUnit.SECONDS);
     }
 
     private void log(String line) {
@@ -214,6 +251,10 @@ final class DiscordBot {
                         registerCommands(guildId);
                     } else if ("INTERACTION_CREATE".equals(type)) {
                         onInteraction(data);
+                    } else if ("MESSAGE_REACTION_ADD".equals(type)) {
+                        onReaction(data, true);
+                    } else if ("MESSAGE_REACTION_REMOVE".equals(type)) {
+                        onReaction(data, false);
                     }
                     break;
                 }
@@ -357,6 +398,24 @@ final class DiscordBot {
                 String name = data == null ? "" : data.optString("name", "");
                 log("Handling /" + name);
                 Commands.handle(rest, interaction);
+            }
+        });
+    }
+
+    /** Reaction roles: gives or removes a role when a tracked reaction changes. */
+    private void onReaction(final JSONObject data, final boolean added) {
+        if (workers.isShutdown()) {
+            return;
+        }
+        workers.submit(new Runnable() {
+            @Override
+            public void run() {
+                Automation.onReaction(rest, data, added, BotState.applicationId, new Automation.Logger() {
+                    @Override
+                    public void log(String line) {
+                        DiscordBot.this.log(line);
+                    }
+                });
             }
         });
     }
