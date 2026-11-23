@@ -391,6 +391,28 @@ final class DiscordBot {
         if (workers.isShutdown()) {
             return;
         }
+        if (interaction.optInt("type", 2) == 3) {
+            // Buttons and select menus arrive as MESSAGE_COMPONENT interactions.
+            final JSONObject data = interaction.optJSONObject("data");
+            log("Handling component "
+                    + (data == null ? "" : data.optString("custom_id", "")));
+            workers.submit(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Automation.onComponent(rest, interaction, new Automation.Logger() {
+                            @Override
+                            public void log(String line) {
+                                DiscordBot.this.log(line);
+                            }
+                        });
+                    } catch (Exception e) {
+                        log("Component handler failed: " + e.getMessage());
+                    }
+                }
+            });
+            return;
+        }
         workers.submit(new Runnable() {
             @Override
             public void run() {

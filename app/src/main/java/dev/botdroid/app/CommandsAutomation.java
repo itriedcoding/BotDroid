@@ -24,6 +24,15 @@ final class CommandsAutomation {
             + "{\"type\":8,\"name\":\"role\",\"description\":\"Role to give\",\"required\":true},"
             + "{\"type\":7,\"name\":\"channel\",\"description\":\"Channel with the message (default: this one)\","
             + "\"required\":false}]},"
+            + "{\"type\":1,\"name\":\"menu\",\"description\":\"Post a clickable role picker\",\"options\":["
+            + "{\"type\":7,\"name\":\"channel\",\"description\":\"Where to post it (default: this channel)\","
+            + "\"required\":false},"
+            + "{\"type\":3,\"name\":\"title\",\"description\":\"Heading (default: Pick your roles)\","
+            + "\"required\":false,\"max_length\":256},"
+            + "{\"type\":3,\"name\":\"description\",\"description\":\"Text under the heading\","
+            + "\"required\":false,\"max_length\":1000},"
+            + "{\"type\":3,\"name\":\"roles\",\"description\":\"Roles to offer: @mentions or IDs, comma separated (default: every safe role)\","
+            + "\"required\":false,\"max_length\":1000}]},"
             + "{\"type\":1,\"name\":\"remove\",\"description\":\"Stop a reaction from giving a role\",\"options\":["
             + "{\"type\":3,\"name\":\"message_id\",\"description\":\"Message ID\",\"required\":true,\"max_length\":24},"
             + "{\"type\":3,\"name\":\"emoji\",\"description\":\"The emoji to unpair\",\"required\":true,"
@@ -88,6 +97,10 @@ final class CommandsAutomation {
             addReactionRole(rest, interaction, guildId);
             return;
         }
+        if ("menu".equals(sub)) {
+            roleMenu(rest, interaction, guildId);
+            return;
+        }
         if ("remove".equals(sub)) {
             String messageId = trim(Commands.optString(interaction, "message_id"));
             String emoji = Automation.emojiKey(Commands.optString(interaction, "emoji"));
@@ -106,12 +119,27 @@ final class CommandsAutomation {
         }
         if ("clear".equals(sub)) {
             int removed = Automation.clearReactionRoles(guildId);
-            reply(rest, interaction, removed == 0 ? "There were no reaction roles to delete."
-                    : "Deleted **" + removed + "** reaction role" + (removed == 1 ? "" : "s")
-                    + ". The reactions already on the messages are left alone.");
+            int menus = Automation.clearRoleMenus(guildId);
+            if (removed == 0 && menus == 0) {
+                reply(rest, interaction, "There were no reaction roles or role menus to delete.");
+                return;
+            }
+            StringBuilder message = new StringBuilder("Deleted ");
+            if (removed > 0) {
+                message.append("**").append(removed).append("** reaction role")
+                        .append(removed == 1 ? "" : "s");
+                if (menus > 0) {
+                    message.append(" and ");
+                }
+            }
+            if (menus > 0) {
+                message.append("**").append(menus).append("** role menu").append(menus == 1 ? "" : "s");
+            }
+            message.append(". The reactions and menus already on messages are left alone; they just stop working.");
+            reply(rest, interaction, message.toString());
             return;
         }
-        reply(rest, interaction, "Use `/reactionrole add`, `remove`, `list` or `clear`.");
+        reply(rest, interaction, "Use `/reactionrole add`, `menu`, `remove`, `list` or `clear`.");
     }
 
     private static void addReactionRole(DiscordRest rest, JSONObject interaction, String guildId)
@@ -169,9 +197,10 @@ final class CommandsAutomation {
     private static void listReactionRoles(DiscordRest rest, JSONObject interaction, String guildId)
             throws Exception {
         List<Automation.ReactionRole> roles = Automation.reactionRoles(guildId);
-        if (roles.isEmpty()) {
-            reply(rest, interaction, "No reaction roles yet. Use `/reactionrole add` with a message ID, "
-                    + "an emoji and a role.");
+        List<Automation.RoleMenu> menus = Automation.roleMenus(guildId);
+        if (roles.isEmpty() && menus.isEmpty()) {
+            reply(rest, interaction, "No reaction roles yet. Use `/reactionrole add` for a reaction, "
+                    + "or `/reactionrole menu` for a clickable picker.");
             return;
         }
         StringBuilder description = new StringBuilder();
@@ -181,10 +210,117 @@ final class CommandsAutomation {
                     .append(role.messageId).append("` in <#").append(role.channelId).append(">\n");
         }
         if (roles.size() > 25) {
-            description.append("_and ").append(roles.size() - 25).append(" more._");
+            description.append("_and ").append(roles.size() - 25).append(" more._\n");
+        }
+        if (!menus.isEmpty()) {
+            description.append("**Role menus**\n");
+            for (Automation.RoleMenu menu : menus) {
+                description.append("· ").append(menu.roleIds.size()).append(" role")
+                        .append(menu.roleIds.size() == 1 ? "" : "s").append(" in <#")
+                        .append(menu.channelId).append(">\n");
+            }
         }
         Commands.respond(rest, interaction, "", true, new JSONArray().put(
-                Commands.embed("Reaction roles · " + roles.size(), 0x5865F2, description.toString())));
+                Commands.embed("Reaction roles · " + roles.size()
+                        + (menus.isEmpty() ? "" : " · " + menus.size() + " menu" + (menus.size() == 1 ? "" : "s")),
+                        0x5865F2, description.toString().trim())));
+    }
+
+    /**
+     * `/reactionrole menu`: posts one message with a dropdown of roles and a
+     * button that clears them. Members pick roles by clicking; no message IDs.
+     */
+    private static void roleMenu(DiscordRest rest, JSONObject interaction, String guildId)
+            throws Exception {
+        String channelId = trim(Commands.optString(interaction, "channel"));
+        if (channelId.isEmpty()) {
+            channelId = Commands.channelId(interaction);
+        }
+        if (channelId == null || channelId.isEmpty()) {
+            reply(rest, interaction, "Pick the channel to post the menu in.");
+            return;
+        }
+        Net.Resp roleResponse = rest.get("/guilds/" + guildId + "/roles");
+        if (!roleResponse.ok()) {
+            reply(rest, interaction, "I could not read the roles here: "
+                    + Commands.failure(roleResponse, "Manage Roles"));
+            return;
+        }
+        JSONArray roles;
+        try {
+            roles = new JSONArray(roleResponse.body);
+        } catch (Exception e) {
+            reply(rest, interaction, "Discord sent a role list I could not read. Try again.");
+            return;
+        }
+        String raw = Commands.optString(interaction, "roles");
+        boolean automatic = raw == null || raw.trim().isEmpty();
+        List<String> roleIds = automatic
+                ? Automation.pickableRoleIds(roles, guildId)
+                : Automation.parseRoleIds(raw, roles, guildId);
+        if (roleIds.isEmpty()) {
+            reply(rest, interaction, automatic
+                    ? "I found no roles I can hand out — they are all managed or carry moderator permissions. "
+                    + "Name the roles instead, e.g. `roles:@Blue @Red`."
+                    : "None of those roles exist here, or they are managed by an integration. "
+                    + "Use @mentions or role IDs.");
+            return;
+        }
+        Net.Resp self = rest.get("/guilds/" + guildId + "/members/@me");
+        if (self.ok()) {
+            long permissions = 0;
+            try {
+                permissions = Long.parseLong(new JSONObject(self.body).optString("permissions", "0"));
+            } catch (Exception ignored) {
+                // an unreadable member leaves the post to fail with its own reason
+            }
+            if ((permissions & Commands.MANAGE_ROLES) == 0) {
+                reply(rest, interaction, "I cannot hand out roles yet: give me **Manage Roles** "
+                        + "and put my role above the roles you want on the menu.");
+                return;
+            }
+        }
+
+        String title = trim(Commands.optString(interaction, "title"));
+        if (title.isEmpty()) {
+            title = "Pick your roles";
+        }
+        String description = trim(Commands.optString(interaction, "description"));
+        if (description.isEmpty()) {
+            description = "Pick a role to add it, pick the same role again to remove it. "
+                    + "The button clears every role on this menu.";
+        }
+        String key = Automation.newMenuKey();
+        JSONArray options = new JSONArray();
+        for (String roleId : roleIds) {
+            options.put(Components.option(roleId, Automation.roleName(roles, roleId), null));
+        }
+        JSONArray components = Components.rows(
+                Components.row(Components.select(Automation.MENU_SELECT + key, "Pick a role",
+                        options, 1, 1)),
+                Components.row(Components.button(Automation.MENU_CLEAR + key, "Remove all",
+                        Components.BUTTON_SECONDARY, "🧹")));
+        JSONObject body = new JSONObject();
+        body.put("embeds", new JSONArray().put(Commands.embed(title, 0x5865F2, description)));
+        body.put("components", components);
+        body.put("allowed_mentions", new JSONObject().put("parse", new JSONArray()));
+        Net.Resp posted = rest.post("/channels/" + channelId + "/messages", body.toString());
+        if (!posted.ok()) {
+            reply(rest, interaction, "I could not post the menu: "
+                    + Commands.failure(posted, "Send Messages and Embed Links"));
+            return;
+        }
+        String messageId = new JSONObject(posted.body).optString("id", "");
+        if (messageId.isEmpty()) {
+            reply(rest, interaction,
+                    "Discord accepted the menu but returned no ID, so it would not work. Nothing was saved.");
+            return;
+        }
+        Automation.addRoleMenu(guildId, new Automation.RoleMenu(key, channelId, messageId, roleIds));
+        reply(rest, interaction, "Posted a role menu with **" + roleIds.size() + "** role"
+                + (roleIds.size() == 1 ? "" : "s") + " in <#" + channelId + ">.\n"
+                + "Members pick a role to add or remove it; **Remove all** clears them. "
+                + "My role has to sit above every role on the menu.");
     }
 
     // -------------------------------------------------------------- schedules

@@ -40,6 +40,7 @@ public final class TestNew {
         customScripts();
         toggles();
         automation();
+        roleMenus();
         System.out.println();
         System.out.println("new: " + passed + " passed, " + failed + " failed");
         if (failed > 0) {
@@ -923,6 +924,38 @@ public final class TestNew {
         return new JSONObject().put("name", name).put("type", 7).put("value", id);
     }
 
+    private static JSONObject menuRole(String id, String name, int position, long permissions, boolean managed)
+            throws Exception {
+        return new JSONObject().put("id", id).put("name", name).put("position", position)
+                .put("permissions", Long.toString(permissions)).put("managed", managed);
+    }
+
+    private static JSONObject component(String menuId, boolean clear, String userId, String... values)
+            throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("custom_id", (clear ? "bd:rrx:" : "bd:rr:") + menuId);
+        data.put("component_type", clear ? 2 : 3);
+        if (!clear) {
+            JSONArray picked = new JSONArray();
+            for (String value : values) {
+                picked.put(value);
+            }
+            data.put("values", picked);
+        }
+        JSONObject member = new JSONObject();
+        member.put("permissions", "0");
+        member.put("user", new JSONObject().put("id", userId).put("username", "member"));
+        JSONObject interaction = new JSONObject();
+        interaction.put("id", "CID");
+        interaction.put("token", "CTOKEN");
+        interaction.put("type", 3);
+        interaction.put("data", data);
+        interaction.put("member", member);
+        interaction.put("guild_id", "G");
+        interaction.put("channel_id", "C");
+        return interaction;
+    }
+
     private static JSONObject interaction(String name, String guild, String channel, long permissions,
                                           JSONObject... options) throws Exception {
         JSONArray optionArray = new JSONArray();
@@ -1333,7 +1366,7 @@ public final class TestNew {
 
         JSONArray defs = Commands.definitions();
         check("reactionrole subcommands", subNames(defs, "reactionrole").toString()
-                .equals("[add, remove, list, clear]"), subNames(defs, "reactionrole").toString());
+                .equals("[add, menu, remove, list, clear]"), subNames(defs, "reactionrole").toString());
         check("schedule subcommands", subNames(defs, "schedule").toString()
                 .equals("[add, list, remove, run]"), subNames(defs, "schedule").toString());
         check("giveaway subcommands", subNames(defs, "giveaway").toString()
@@ -1513,6 +1546,150 @@ public final class TestNew {
                 "stored anyway");
         check("giveaway explains the missing permission", contains(content(rest), "Add Reactions"),
                 content(rest));
+
+        Automation.load("[]");
+    }
+
+    private static void roleMenus() throws Exception {
+        Automation.load("[]");
+        Automation.setSaver(json -> { });
+        Automation.Logger quiet = line -> { };
+
+        JSONArray roles = new JSONArray()
+                .put(menuRole("G", "everyone", 0, 0L, false))
+                .put(menuRole("2002", "Blue", 2, 0L, false))
+                .put(menuRole("2003", "Red", 3, 0L, false))
+                .put(menuRole("2004", "Admin", 4, 8L, false))
+                .put(menuRole("2005", "Bots", 5, 0L, true));
+
+        check("menus skip @everyone, managed and dangerous roles",
+                Automation.pickableRoleIds(roles, "G").toString().equals("[2003, 2002]"),
+                Automation.pickableRoleIds(roles, "G").toString());
+        check("an admin role is not offered", !Automation.isPickableRole("G",
+                menuRole("2004", "Admin", 4, 8L, false)), "offered anyway");
+        check("role mentions are parsed", Automation.parseRoleIds("<@&2002>, 2003 9999 <@&2005>", roles, "G")
+                .toString().equals("[2002, 2003]"),
+                Automation.parseRoleIds("<@&2002>, 2003 9999 <@&2005>", roles, "G").toString());
+
+        Automation.RoleChange change = Automation.planToggle(java.util.Arrays.asList("2002"),
+                java.util.Arrays.asList("2002", "2003"), java.util.Arrays.asList("2003"));
+        check("a pick adds the new role", change.add.toString().equals("[2003]")
+                && change.remove.isEmpty(), change.add + "/" + change.remove);
+        check("picking the same role again takes it back", Automation.planToggle(
+                java.util.Arrays.asList("2002"), java.util.Arrays.asList("2002", "2003"),
+                java.util.Arrays.asList("2002")).remove.toString().equals("[2002]"), "not removed");
+        check("a role outside the menu is ignored", Automation.planToggle(
+                java.util.Arrays.asList("2002"), java.util.Arrays.asList("2003"),
+                java.util.Arrays.asList("7777")).isEmpty(), "planned a change");
+        check("clearing removes every held menu role", Automation.planRoleChange(
+                java.util.Arrays.asList("2002", "777"), java.util.Arrays.asList("2002", "2003"),
+                java.util.Collections.<String>emptyList()).remove.toString().equals("[2002]"),
+                "not cleared");
+
+        DiscordRest rest = new DiscordRest("t");
+        rest.responder = (method, path, body) -> {
+            if ("GET".equals(method) && "/guilds/G/roles".equals(path)) {
+                return new Net.Resp(200, roles.toString());
+            }
+            if ("GET".equals(method) && "/guilds/G/members/@me".equals(path)) {
+                return new Net.Resp(200, "{\"permissions\":\"268435456\"}");
+            }
+            if ("POST".equals(method) && "/channels/C/messages".equals(path)) {
+                return new Net.Resp(200, "{\"id\":\"M70\"}");
+            }
+            return null;
+        };
+        Commands.handle(rest, subInteraction("reactionrole", "menu", "G", "C", Commands.MANAGE_ROLES,
+                channelOption("channel", "C"), stringOption("title", "Colours")));
+        DiscordRest.Call posted = null;
+        for (DiscordRest.Call call : rest.calls) {
+            if ("POST".equals(call.method) && "/channels/C/messages".equals(call.path)) {
+                posted = call;
+            }
+        }
+        check("role menu posts one message", posted != null, "no post");
+        check("role menu carries a single-choice dropdown", posted != null
+                && posted.body.contains("\"type\":3")
+                && posted.body.contains("\"custom_id\":\"bd:rr:")
+                && posted.body.contains("\"max_values\":1"), posted == null ? "no post" : posted.body);
+        check("role menu carries a clear button", posted != null
+                && posted.body.contains("\"custom_id\":\"bd:rrx:")
+                && posted.body.contains("Remove all"), posted == null ? "no post" : posted.body);
+        check("role menu leaves unsafe roles out", posted != null
+                && !posted.body.contains("\"value\":\"2004\"")
+                && !posted.body.contains("\"value\":\"2005\""), posted == null ? "no post" : posted.body);
+        check("role menu is stored", Automation.roleMenus("G").size() == 1, "not stored");
+        check("role menu reply counts the roles", contains(content(rest), "**2** roles"), content(rest));
+
+        String saved = Automation.json();
+        Automation.load(saved);
+        check("role menus survive a reload", Automation.roleMenus("G").size() == 1, saved);
+        Automation.RoleMenu menu = Automation.roleMenus("G").get(0);
+
+        DiscordRest selectRest = new DiscordRest("t");
+        selectRest.responder = (method, path, body) -> "GET".equals(method)
+                && "/guilds/G/members/42".equals(path)
+                ? new Net.Resp(200, "{\"roles\":[\"2002\"]}") : null;
+        Automation.onComponent(selectRest, component(menu.id, false, "42", "2003"), quiet);
+        boolean added = false;
+        boolean droppedOther = false;
+        for (DiscordRest.Call call : selectRest.calls) {
+            if ("PUT".equals(call.method) && "/guilds/G/members/42/roles/2003".equals(call.path)) {
+                added = true;
+            }
+            if ("DELETE".equals(call.method)) {
+                droppedOther = true;
+            }
+        }
+        check("picking a role gives it", added, "no PUT");
+        check("a pick leaves the member's other roles alone", !droppedOther, "deleted a role");
+        check("the panel reply is only visible to the member",
+                reply(selectRest) != null && reply(selectRest).optInt("flags", 0) == 64,
+                String.valueOf(reply(selectRest)));
+
+        DiscordRest toggleRest = new DiscordRest("t");
+        toggleRest.responder = (method, path, body) -> "GET".equals(method)
+                && "/guilds/G/members/42".equals(path)
+                ? new Net.Resp(200, "{\"roles\":[\"2003\"]}") : null;
+        Automation.onComponent(toggleRest, component(menu.id, false, "42", "2003"), quiet);
+        boolean takenBack = false;
+        for (DiscordRest.Call call : toggleRest.calls) {
+            if ("DELETE".equals(call.method) && "/guilds/G/members/42/roles/2003".equals(call.path)) {
+                takenBack = true;
+            }
+        }
+        check("picking a role you already have takes it away", takenBack, "no DELETE");
+
+        DiscordRest clearRest = new DiscordRest("t");
+        clearRest.responder = (method, path, body) -> "GET".equals(method)
+                && "/guilds/G/members/42".equals(path)
+                ? new Net.Resp(200, "{\"roles\":[\"2002\",\"2003\",\"777\"]}") : null;
+        Automation.onComponent(clearRest, component(menu.id, true, "42"), quiet);
+        int cleared = 0;
+        boolean touchedOther = false;
+        for (DiscordRest.Call call : clearRest.calls) {
+            if ("DELETE".equals(call.method)) {
+                cleared++;
+                if (call.path.endsWith("/777")) {
+                    touchedOther = true;
+                }
+            }
+        }
+        check("the clear button removes every menu role", cleared == 2, "removed=" + cleared);
+        check("the clear button leaves other roles alone", !touchedOther, "deleted a role outside the menu");
+
+        DiscordRest staleRest = new DiscordRest("t");
+        Automation.onComponent(staleRest, component("gone", false, "42", "2002"), quiet);
+        check("a stale menu explains itself", contains(content(staleRest), "no longer active"),
+                content(staleRest));
+        check("a stale menu changes no roles", staleRest.lastNonCallback() == null, "made a call");
+
+        DiscordRest clearCommand = new DiscordRest("t");
+        Commands.handle(clearCommand, subInteraction("reactionrole", "clear", "G", "C",
+                Commands.MANAGE_ROLES));
+        check("clear removes role menus too", Automation.roleMenus("G").isEmpty(), "still stored");
+        check("clear says what went away", contains(content(clearCommand), "role menu"),
+                content(clearCommand));
 
         Automation.load("[]");
     }

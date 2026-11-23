@@ -92,7 +92,7 @@ final class Commands {
             + "`/mock` `/rot13` `/caesar` `/sortlines` `/dedupe` `/hex` `/charinfo` `/repeat` `/embed` "
             + "`/weekday` `/percentage`\n"
             + "__Automation__\n"
-            + "`/reactionrole add|remove|list|clear` `/schedule add|list|remove|run` "
+            + "`/reactionrole add|menu|remove|list|clear` `/schedule add|list|remove|run` "
             + "`/giveaway start|list|end|reroll`\n"
             + "__Roblox__\n"
             + "`/roblox user|avatar|game|group|games`\n"

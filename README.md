@@ -194,7 +194,8 @@ the bot has no database server of its own, and the command says so.
 | Command | What it does | Permission |
 | --- | --- | --- |
 | `/reactionrole add` | Pair an emoji on a message with a role; react to get it | Manage Roles |
-| `/reactionrole remove` `/reactionrole clear` | Delete one pairing, or every pairing | Manage Roles |
+| `/reactionrole menu` | Post a dropdown of roles with a **Remove all** button; members click to pick | Manage Roles |
+| `/reactionrole remove` `/reactionrole clear` | Delete one pairing, or every pairing and menu | Manage Roles |
 | `/reactionrole list` | Every pairing in this server | Manage Roles |
 | `/schedule add` | Repeat a message in a channel every N minutes | Manage Server |
 | `/schedule list` `/schedule remove` `/schedule run` | Show them, delete one, or post one now | Manage Server |
@@ -324,6 +325,15 @@ server, and none of them needs a privileged intent:
   `MESSAGE_REACTION_REMOVE` events drive it, so nothing has to be switched on in
   the Developer Portal. The bot's own role has to sit above the role it hands
   out; a refusal is logged with Discord's reason.
+- **Role menus.** `/reactionrole menu` posts one message with a dropdown of up to 25 roles and a **Remove all** button. Pick a role once to add it and again
+to take it away; the button clears every role on the menu. Every step is a
+normal role change on the member — no message IDs, no reactions. Without
+arguments the
+menu offers every role that looks safe: `@everyone`, integration-managed roles
+and roles carrying moderator or administrator permissions are left out, so a
+click can never hand someone power. Name roles explicitly with
+`roles:@Blue @Red` to choose the list yourself. Buttons and select menus arrive
+as ordinary `INTERACTION_CREATE` events, so this needs no privileged intent.
 - **Repeating messages.** `/schedule add channel text minutes` posts the text
   every N minutes (5 to 10080). `/schedule list` shows the next fire time and
   `/schedule run` posts one immediately and restarts the timer.
@@ -473,9 +483,11 @@ without a URL, listening, watching, competing, custom status, state lines,
 empty activity, invalid values), `/status` with a canned device, the warnings
 store and the script language (nesting, arguments, `$if`/`$else`, variables,
 `$onlyPerms`, escapes, error reporting), the reaction-role store and the role
-it grants on a reaction, the schedule timer (due, early, missed runs, immediate
-run, removal) and the giveaway cycle (entry reaction, closing, bot entries
-ignored, no re-fire, refusal without Add Reactions). 276 checks in total.
+it grants on a reaction, the role menus (safe-role filter, dropdown add and
+remove, the clear button, a stale menu, a reload), the schedule timer (due,
+early, missed runs, immediate run, removal) and the giveaway cycle (entry
+reaction, closing, bot entries ignored, no re-fire, refusal without Add
+Reactions). 301 checks in total.
 `tools/` is not compiled into the APK.
 
 ## How it works
@@ -490,8 +502,9 @@ app/src/main/java/dev/botdroid/app/
   Script.java           the $function script language (parser and evaluator)
   Variables.java        global / per-user / per-server script variables
   Warnings.java         warnings issued with /warn, stored on the phone
-  Automation.java       reaction roles, repeating messages and giveaways, stored on the phone
+  Automation.java       reaction roles, role menus, repeating messages and giveaways
   CommandsAutomation.java  /reactionrole, /schedule and /giveaway handlers
+  Components.java       action rows, buttons and select menus
   DeviceInfo.java       device snapshot model and formatting for /status
   DeviceProbe.java      reads Build, battery, network, memory and storage
   BootReceiver.java     restarts the bot after a reboot

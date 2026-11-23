@@ -27,8 +27,8 @@ echo "==> aapt2 link"
     --java "$OUT/gen" \
     --min-sdk-version 26 \
     --target-sdk-version 34 \
-    --version-code "${VERSION_CODE:-9}" \
-    --version-name "${VERSION_NAME:-1.8}" \
+    --version-code "${VERSION_CODE:-10}" \
+    --version-name "${VERSION_NAME:-1.9}" \
     "$OUT/res.zip"
 
 echo "==> javac"
